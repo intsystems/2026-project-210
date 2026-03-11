@@ -1,0 +1,173 @@
+% !TeX program = pdflatex
+\documentclass[11pt]{extarticle}
+
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english,russian]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{mathtools}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{a4paper, left=1.5cm, right=1.5cm, top=2cm, bottom=2cm}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{indentfirst}
+\usepackage{cite}
+\usepackage{xcolor}
+
+\begin{document}
+
+\begin{center}
+    \Large\textbf{Улучшение оценки нормы разности гессианов\\ для модели смеси экспертов} \\
+    \vspace{0.5cm}
+    \large Игнатьев Даниил и Никита Киселёв  \\
+    % \normalsize Институт проблем передачи информации им. А.А. Харкевича РАН, Москва \\
+    \texttt{ignatev.daniil@phystech.edu}
+\end{center}
+
+\vspace{1cm}
+
+% Аннотация: заголовок по центру, текст по центру в minipage
+\begin{center}
+    \textbf{Аннотация}
+\end{center}
+\begin{center}
+    \small
+    \begin{minipage}{0.85\textwidth}
+        Модель смеси экспертов (MoE) является эффективной архитектурой для масштабирования нейронных сетей, однако её локальные геометрические свойства, в частности структура матрицы Гессе, остаются малоизученными. В данной работе исследуется гаусс-ньютоновская компонента матрицы Гессе для модели MoE. Используя подход матрично-представимых сетей, разработанный ранее для полносвязных, сверточных и трансформерных архитектур, мы выводим явную верхнюю оценку спектральной нормы этой компоненты. Оценка выражается через нормы весов экспертов и гейтинга, нормы входных данных и архитектурные параметры (число экспертов, размерности слоев). Полученный результат позволяет анализировать влияние числа экспертов на кривизну поверхности функции потерь и может быть использован для изучения стабилизации ландшафта MoE при увеличении объема выборки. Экспериментальная валидация планируется на синтетических данных и задачах классификации.
+
+        \textbf{Ключевые слова:} смесь экспертов, матрица Гессе, гаусс-ньютоновское приближение, спектральная норма, матрично-представимые сети.
+    \end{minipage}
+\end{center}
+
+\vspace{1cm}
+
+\section{Введение}
+
+Модель смеси экспертов (MoE) \cite{Jacobs1991, Shazeer2017} широко применяется для построения больших нейронных сетей благодаря возможности разреженной активации экспертов и эффективного масштабирования. Однако теоретическое понимание свойств оптимизационной поверхности MoE, в частности её кривизны, остается ограниченным. Между тем, анализ матрицы Гессе функции потерь играет ключевую роль в изучении сходимости обучения и стабилизации ландшафта при увеличении объема данных \cite{Papyan2019, Fort2019}.
+
+В работах \cite{Kiselev2024, Meshkov2024} был развит подход к анализу спектральных свойств матрицы Гессе для матрично-представимых нейронных сетей, основанный на разложении Гаусса–Ньютона \(\mathbf{H}(\mathbf{w}) = \mathbf{G}(\mathbf{w}) + \mathbf{R}(\mathbf{w})\) и оценке нормы гаусс-ньютоновской компоненты \(\mathbf{G}(\mathbf{w}) = \mathbf{J}(\mathbf{w})^\top \mathbf{A}(\mathbf{w}) \mathbf{J}(\mathbf{w})\). Для полносвязных, сверточных и трансформерных сетей были получены явные верхние оценки \(\|\mathbf{G}(\mathbf{w})\|_2\), выраженные через нормы весов, активаций и архитектурные параметры. Данная методология может быть распространена на модель MoE, если представить её в виде матрично-представимой сети.
+
+Целью настоящей работы является получение верхней оценки спектральной нормы гаусс-ньютоновской компоненты матрицы Гессе для модели смеси экспертов. Такая оценка позволит в дальнейшем использовать её в критериях сходимости ландшафта \cite{Kiselev2024} для MoE и анализировать влияние числа экспертов на локальную геометрию поверхности.
+
+\section{Постановка задачи}
+
+\subsection{Модель смеси экспертов}
+
+Рассмотрим задачу обучения с учителем, где объект представлен парой \( (\mathbf{x}, y) \), \(\mathbf{x} \in \mathbb{R}^{d_{\text{in}}}\), \(y \in \mathbb{Y}\).  
+Определим \textbf{один слой смеси экспертов (MoE)}, который в архитектуре трансформера обычно заменяет блок Feed-Forward Network (FFN). Слой состоит из \(E\) экспертов и обучаемого гейтинга (роутера). Каждый эксперт представляет собой двухслойную полносвязную сеть с активацией ReLU:
+
+\[
+\mathrm{FFN}_e(\mathbf{x}) = \mathbf{W}_e^{(2)} \,\mathrm{ReLU}\!\left(\mathbf{W}_e^{(1)}\mathbf{x} + \mathbf{b}_e^{(1)}\right) + \mathbf{b}_e^{(2)}, \quad e = 1,\dots,E,
+\]
+
+где  
+\(\mathbf{W}_e^{(1)} \in \mathbb{R}^{d_{\text{ff}} \times d_{\text{in}}}\), \(\mathbf{b}_e^{(1)} \in \mathbb{R}^{d_{\text{ff}}}\),  
+\(\mathbf{W}_e^{(2)} \in \mathbb{R}^{d_{\text{out}} \times d_{\text{ff}}}\), \(\mathbf{b}_e^{(2)} \in \mathbb{R}^{d_{\text{out}}}\).  
+Для простоты изложения будем полагать \(d_{\text{out}} = d_{\text{in}} = d\) (как в трансформерах) и иногда опускать смещения \(\mathbf{b}_e^{(2)}\) без потери общности, так как они не влияют на оценку спектральной нормы весовой части.
+
+Параметры всех экспертов обозначим \(\mathbf{w}_{\text{exp}} = (\mathbf{w}_1,\dots,\mathbf{w}_E)\), где \(\mathbf{w}_e\) объединяет все веса и смещения \(e\)-го эксперта.
+
+\textbf{Гейтинг (роутер).} Мы рассматриваем два варианта, различающихся гладкостью и степенью разреженности.
+
+\textit{Гладкий softmax (все эксперты):}  
+Классический softmax over all experts:
+\[
+g_e(\mathbf{x}) = \frac{\exp\left(\mathbf{a}_e^\top \mathbf{x} + b_e\right)}{\sum_{j=1}^E \exp\left(\mathbf{a}_j^\top \mathbf{x} + b_j\right)}, \quad e = 1,\dots,E,
+\]
+где \(\mathbf{a}_e \in \mathbb{R}^d\), \(b_e \in \mathbb{R}\). Совокупность параметров гейтинга обозначим  
+\(\mathbf{w}_g = (\mathbf{a}_1,\dots,\mathbf{a}_E, b_1,\dots,b_E) \in \mathbb{R}^{E(d+1)}\).
+
+\textit{Разреженный top‑K:}  
+Для каждого входа \(\mathbf{x}\) вычисляются логиты \(s_e(\mathbf{x}) = \mathbf{a}_e^\top \mathbf{x} + b_e\).  
+Множество индексов активируемых экспертов \(\mathcal{T}(\mathbf{x})\) состоит из \(K\) экспертов с наибольшими значениями \(s_e(\mathbf{x})\).  
+Веса для выбранных экспертов нормируются softmax:
+\[
+\tilde{g}_e(\mathbf{x}) = \frac{\exp(s_e(\mathbf{x}))}{\sum_{j \in \mathcal{T}(\mathbf{x})} \exp(s_j(\mathbf{x}))}, \quad e \in \mathcal{T}(\mathbf{x}); \quad \tilde{g}_e(\mathbf{x}) = 0 \text{ иначе}.
+\]
+Этот вариант не является гладким из‑за дискретной операции выбора, однако почти всюду (в областях постоянства \(\mathcal{T}(\mathbf{x})\)) он дифференцируем.
+% При анализе мы будем рассматривать такие области или использовать гладкую аппроксимацию (например, softmax с температурой).
+
+\vspace{0.5cm}
+% Синий вариант: без общего эксперта
+\textcolor{blue}{%
+\textbf{Архитектура без общего эксперта.} Выход MoE‑слоя формируется как взвешенная сумма выходов экспертов:
+\[
+\mathbf{z} = \sum_{e=1}^E g_e(\mathbf{x}) \,\mathrm{FFN}_e(\mathbf{x})
+\]
+для варианта с softmax-гейтингом, или с \(\tilde{g}_e\) для top‑K гейтинга. Полный вектор параметров модели (одного MoE‑слоя) есть
+\[
+\mathbf{w} = (\mathbf{w}_{\text{exp}}, \mathbf{w}_g),
+\]
+где \(\mathbf{w}_{\text{exp}}\) — параметры всех экспертов, \(\mathbf{w}_g\) — параметры гейтинга.
+}
+
+\vspace{0.5cm}
+% Красный вариант: с общим экспертом
+\textcolor{red}{%
+\textbf{Архитектура с общим экспертом.} Дополнительно к экспертам вводится общий эксперт \(\mathrm{FFN}_{\text{shared}}(\mathbf{x})\), активируемый для всех входов. Выход слоя принимает вид
+\[
+\mathbf{z} = \mathrm{FFN}_{\text{shared}}(\mathbf{x}) + \sum_{e=1}^E g_e(\mathbf{x}) \,\mathrm{FFN}_e(\mathbf{x})
+\]
+для softmax-гейтинга (или с \(\tilde{g}_e\) для top‑K). Параметры общего эксперта обозначим \(\mathbf{w}_{\text{shared}}\). Тогда полный вектор параметров
+\[
+\mathbf{w} = (\mathbf{w}_{\text{exp}}, \mathbf{w}_g, \mathbf{w}_{\text{shared}}).
+\]
+}
+
+\vspace{0.5cm}
+
+\subsection{Функция потерь и матрица Гессе}
+
+Пусть задана дважды дифференцируемая функция потерь \(\ell(\mathbf{z}, y)\) (например, квадратичная потеря или кросс‑энтропия). Для одного объекта \((\mathbf{x}, y)\) определим эмпирическую функцию потерь как \(\ell(\mathbf{z}(\mathbf{w}), y)\), где \(\mathbf{z}(\mathbf{w})\) — выход MoE‑слоя. Матрица Гессе этой функции по параметрам \(\mathbf{w}\) допускает разложение Гаусса–Ньютона \cite{Meshkov2024}:
+\[
+\mathbf{H}(\mathbf{w}) = \mathbf{J}(\mathbf{w})^\top \mathbf{A}(\mathbf{w}) \mathbf{J}(\mathbf{w}) + \mathbf{R}(\mathbf{w}),
+\]
+где  
+\(\mathbf{J}(\mathbf{w}) = \frac{\partial \mathbf{z}}{\partial \mathbf{w}} \in \mathbb{R}^{d \times N}\) — якобиан выхода по параметрам,  
+\(\mathbf{A}(\mathbf{w}) = \nabla_{\mathbf{z}}^2 \ell(\mathbf{z}, y) \in \mathbb{R}^{d \times d}\) — матрица кривизны функции потерь по выходу,  
+\(\mathbf{R}(\mathbf{w})\) — остаточная компонента, связанная со вторыми производными выхода по параметрам.
+
+Как показано в \cite{Kiselev2024, Meshkov2024}, для анализа локальных свойств ландшафта часто достаточно оценить спектральную норму гаусс-ньютоновской компоненты
+\[
+\mathbf{G}(\mathbf{w}) = \mathbf{J}(\mathbf{w})^\top \mathbf{A}(\mathbf{w}) \mathbf{J}(\mathbf{w}),
+\]
+поскольку остаточная компонента \(\mathbf{R}(\mathbf{w})\) в окрестности минимума мала или ограничена по норме.
+
+\subsection{Предположения}
+
+Для получения верхних оценок введём стандартные предположения, аналогичные использованным в диссертации для других архитектур:
+
+\begin{enumerate}
+    \item \textbf{Ограниченность входных данных:} \(\|\mathbf{x}\|_2 \le B_x\).
+    \item \textbf{Ограниченность весов:}  
+    Для всех экспертов и гейтинга спектральные нормы матриц весов ограничены константой \(B_W\):
+    \[
+    \|\mathbf{W}_e^{(1)}\|_2, \|\mathbf{W}_e^{(2)}\|_2 \le B_W, \quad \|\mathbf{a}_e\|_2 \le B_W \ (\text{или аналогично}).
+    \]
+    Для смещений \(\mathbf{b}\) можно использовать \(\ell_2\)-норму, но они обычно не влияют на оценку главного члена.
+    % \item \textbf{Липшицевость активаций:} \(\mathrm{ReLU}\) и её производная (обобщённая) ограничены по норме: \(\|\mathrm{ReLU}\|_{\mathrm{Lip}} = 1\), \(\|\mathrm{ReLU}'\|_{\infty} \le 1\).
+    \item \textbf{Ограниченность матрицы кривизны потерь:} \(\|\mathbf{A}(\mathbf{w})\|_2 \le M_A\).
+    \item \textbf{Для top‑K гейтинга} дополнительно предполагаем, что рассматриваются точки \(\mathbf{w}\), в которых множество \(\mathcal{T}(\mathbf{x})\) локально постоянно, так что \(\tilde{g}_e\) дифференцируемы. Вне этих областей можно использовать субградиентные оценки или гладкую аппроксимацию.
+\end{enumerate}
+
+\begin{thebibliography}{99}
+
+\bibitem{Vapnik1995} Vapnik V. N. The Nature of Statistical Learning Theory. -- Springer, 1995.
+\bibitem{Kaplan2020} Kaplan J. et al. Scaling laws for neural language models // arXiv:2001.08361. 2020.
+\bibitem{Hoffmann2022} Hoffmann J. et al. Training compute-optimal large language models // NeurIPS. 2022.
+\bibitem{Li2018} Li H. et al. Visualizing the loss landscape of neural nets // NeurIPS. 2018.
+\bibitem{Fort2019} Fort S., Ganguli S. Emergent properties of the local geometry of neural loss landscapes // arXiv:1910.05929. 2019.
+\bibitem{Papyan2019} Papyan V. Measurements of three-level hierarchical structure in the outliers in the spectrum of deepnet Hessians // ICML. 2019.
+\bibitem{Motrenko2014} Motrenko A., Strijov V. Sample size estimation for logistic regression using cross-validation and Kullback–Leibler divergence // JMLR. 2014.
+\bibitem{Bishop2006} Bishop C. M. Pattern Recognition and Machine Learning. -- Springer, 2006.
+\bibitem{Jacobs1991} Jacobs R. A. et al. Adaptive mixtures of local experts // Neural Computation. 1991.
+\bibitem{Shazeer2017} Shazeer N. et al. Outrageously large neural networks: The sparsely-gated mixture-of-experts layer // ICLR. 2017.
+\bibitem{Ghorbani2019} Ghorbani B., Krishnan S., Xiao Y. An investigation into neural net optimization via Hessian eigenvalue density // ICML. 2019.
+\bibitem{Granziol2021} Granziol D., Zohren S., Roberts S. Hessian Eigenspectra of More Realistic Nonlinear Models // NeurIPS. 2021.
+\bibitem{Kiselev2024} Kiselev N. S., Grabovoy A. V. Unraveling the Hessian: A Key to Smooth Convergence in Loss Function Landscapes // Doklady Mathematics. 2024.
+\bibitem{Meshkov2024} Meshkov V., Kiselev N., Grabovoy A. ConvNets Landscape Convergence: Hessian-Based Analysis of Matricized Networks // ISPRAS Open Conference. 2024.
+
+\end{thebibliography}
+
+\end{document}
