@@ -4,9 +4,8 @@
 \usepackage[T2A]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[english,russian]{babel}
-\usepackage{amsmath,amssymb,amsfonts}
-\usepackage{mathtools}
-\usepackage{hyperref}
+\usepackage{amsmath,amssymb,amsfonts,amsthm,mathtools}
+%\usepackage{hyperref}
 \usepackage{geometry}
 \geometry{a4paper, left=1.5cm, right=1.5cm, top=2cm, bottom=2cm}
 \usepackage{setspace}
@@ -14,6 +13,21 @@
 \usepackage{indentfirst}
 \usepackage{cite}
 \usepackage{xcolor}
+
+
+\usepackage{bm}
+\usepackage[hidelinks]{hyperref}
+
+\DeclareMathOperator{\ReLU}{ReLU}
+\DeclareMathOperator{\col}{col}
+
+\newtheorem{theorem}{Теорема}[section]
+\newtheorem{lemma}[theorem]{Лемма}
+\newtheorem{corollary}[theorem]{Следствие}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Определение}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Замечание}
 
 \begin{document}
 
@@ -44,11 +58,13 @@
 
 \section{Введение}
 
-Модель смеси экспертов (MoE) \cite{Jacobs1991, Shazeer2017} широко применяется для построения больших нейронных сетей благодаря возможности разреженной активации экспертов и эффективного масштабирования. Однако теоретическое понимание свойств оптимизационной поверхности MoE, в частности её кривизны, остается ограниченным. Между тем, анализ матрицы Гессе функции потерь играет ключевую роль в изучении сходимости обучения и стабилизации ландшафта при увеличении объема данных \cite{Papyan2019, Fort2019}.
+Модель смеси экспертов (Mixture of Experts, MoE) \cite{Jacobs1991,Shazeer2017,Fedus2021} широко применяется для построения больших нейронных сетей благодаря возможности разреженной активации экспертов, эффективного масштабирования и снижения вычислительных затрат при увеличении числа параметров. Однако теоретическое понимание свойств оптимизационной поверхности MoE, в частности её кривизны, остаётся ограниченным. Между тем, анализ матрицы Гессе функции потерь играет ключевую роль в изучении сходимости обучения и стабилизации ландшафта при увеличении объема данных \cite{Papyan2019, Fort2019}.
 
 В работах \cite{Kiselev2024, Meshkov2024} был развит подход к анализу спектральных свойств матрицы Гессе для матрично-представимых нейронных сетей, основанный на разложении Гаусса–Ньютона \(\mathbf{H}(\mathbf{w}) = \mathbf{G}(\mathbf{w}) + \mathbf{R}(\mathbf{w})\) и оценке нормы гаусс-ньютоновской компоненты \(\mathbf{G}(\mathbf{w}) = \mathbf{J}(\mathbf{w})^\top \mathbf{A}(\mathbf{w}) \mathbf{J}(\mathbf{w})\). Для полносвязных, сверточных и трансформерных сетей были получены явные верхние оценки \(\|\mathbf{G}(\mathbf{w})\|_2\), выраженные через нормы весов, активаций и архитектурные параметры. Данная методология может быть распространена на модель MoE, если представить её в виде матрично-представимой сети.
 
-Целью настоящей работы является получение верхней оценки спектральной нормы гаусс-ньютоновской компоненты матрицы Гессе для модели смеси экспертов. Такая оценка позволит в дальнейшем использовать её в критериях сходимости ландшафта \cite{Kiselev2024} для MoE и анализировать влияние числа экспертов на локальную геометрию поверхности.
+Особый интерес представляют разреженные варианты маршрутизации, при которых для каждого входа активируется только подмножество экспертов. Именно такие механизмы используются в современных sparse MoE-архитектурах, например в Mixtral \cite{Mixtral2024}. Поэтому наряду с полным softmax-гейтингом важно рассмотреть и его разреженные модификации, возникающие после top-$K$-отбора экспертов.
+
+Целью настоящей работы является получение явной верхней оценки спектральной нормы гаусс"--~ньютоновской компоненты матрицы Гессе для одного слоя смеси экспертов с softmax-гейтингом и связанных с ним разреженных вариантов маршрутизации. Такая оценка позволит в дальнейшем использовать критерии сходимости ландшафта \cite{Kiselev2024} для MoE-архитектур и анализировать влияние числа экспертов и схемы маршрутизации на локальную геометрию поверхности функции потерь.
 
 \section{Постановка задачи}
 
@@ -64,58 +80,69 @@
 где  
 \(\mathbf{W}_e^{(1)} \in \mathbb{R}^{d_{\text{ff}} \times d_{\text{in}}}\), \(\mathbf{b}_e^{(1)} \in \mathbb{R}^{d_{\text{ff}}}\),  
 \(\mathbf{W}_e^{(2)} \in \mathbb{R}^{d_{\text{out}} \times d_{\text{ff}}}\), \(\mathbf{b}_e^{(2)} \in \mathbb{R}^{d_{\text{out}}}\).  
-Для простоты изложения будем полагать \(d_{\text{out}} = d_{\text{in}} = d\) (как в трансформерах) и иногда опускать смещения \(\mathbf{b}_e^{(2)}\) без потери общности, так как они не влияют на оценку спектральной нормы весовой части.
+Для простоты будем полагать $d_{\text{out}}=d_{\text{in}}=d$, как в стандартных трансформерных блоках.
 
 Параметры всех экспертов обозначим \(\mathbf{w}_{\text{exp}} = (\mathbf{w}_1,\dots,\mathbf{w}_E)\), где \(\mathbf{w}_e\) объединяет все веса и смещения \(e\)-го эксперта.
 
-\textbf{Гейтинг (роутер).} Мы рассматриваем два варианта, различающихся гладкостью и степенью разреженности.
+\paragraph{Гейтинг (роутер).}
+Рассмотрим три варианта маршрутизации, различающихся гладкостью и степенью разреженности.
 
-\textit{Гладкий softmax (все эксперты):}  
-Классический softmax over all experts:
-\[
-g_e(\mathbf{x}) = \frac{\exp\left(\mathbf{a}_e^\top \mathbf{x} + b_e\right)}{\sum_{j=1}^E \exp\left(\mathbf{a}_j^\top \mathbf{x} + b_j\right)}, \quad e = 1,\dots,E,
-\]
-где \(\mathbf{a}_e \in \mathbb{R}^d\), \(b_e \in \mathbb{R}\). Совокупность параметров гейтинга обозначим  
-\(\mathbf{w}_g = (\mathbf{a}_1,\dots,\mathbf{a}_E, b_1,\dots,b_E) \in \mathbb{R}^{E(d+1)}\).
+\textit{1. Полный softmax по всем экспертам.}
+Классический роутер имеет вид
+\begin{equation*}
+    g_e(\mathbf x)
+    =
+    \frac{\exp(\mathbf a_e^\top \mathbf x+b_e)}
+    {\sum\limits_{j=1}^{E}\exp(\mathbf a_j^\top \mathbf x+b_j)},
+    \qquad e=1,\dots,E,
+\end{equation*}
+где $\mathbf a_e\in\mathbb R^d$, $b_e\in\mathbb R$. Совокупность параметров роутера обозначим через
+\begin{equation*}
+    \mathbf w_g=(\mathbf a_1,\dots,\mathbf a_E,b_1,\dots,b_E)\in\mathbb R^{E(d+1)}.
+\end{equation*}
 
-\textit{Разреженный top‑K:}  
-Для каждого входа \(\mathbf{x}\) вычисляются логиты \(s_e(\mathbf{x}) = \mathbf{a}_e^\top \mathbf{x} + b_e\).  
-Множество индексов активируемых экспертов \(\mathcal{T}(\mathbf{x})\) состоит из \(K\) экспертов с наибольшими значениями \(s_e(\mathbf{x})\).  
-Веса для выбранных экспертов нормируются softmax:
-\[
-\tilde{g}_e(\mathbf{x}) = \frac{\exp(s_e(\mathbf{x}))}{\sum_{j \in \mathcal{T}(\mathbf{x})} \exp(s_j(\mathbf{x}))}, \quad e \in \mathcal{T}(\mathbf{x}); \quad \tilde{g}_e(\mathbf{x}) = 0 \text{ иначе}.
-\]
-Этот вариант не является гладким из‑за дискретной операции выбора, однако почти всюду (в областях постоянства \(\mathcal{T}(\mathbf{x})\)) он дифференцируем.
-% При анализе мы будем рассматривать такие области или использовать гладкую аппроксимацию (например, softmax с температурой).
+\textit{2. Top-$K$ по логитам с softmax-перенормировкой на активном множестве.}
+Для каждого входа $\mathbf x$ вычисляются логиты
+\begin{equation*}
+    s_e(\mathbf x)=\mathbf a_e^\top \mathbf x+b_e,
+    \qquad e=1,\dots,E,
+\end{equation*}
+и множество активных экспертов $\mathcal T(\mathbf x)$ состоит из $K$ индексов, соответствующих наибольшим значениям $s_e(\mathbf x)$. Тогда коэффициенты гейтинга задаются формулой
+\begin{equation*}
+    \tilde g_e(\mathbf x)=
+    \begin{cases}
+        \dfrac{\exp(s_e(\mathbf x))}
+        {\sum\limits_{j\in\mathcal T(\mathbf x)}\exp(s_j(\mathbf x))},
+        & e\in\mathcal T(\mathbf x),\\[1.2ex]
+        0, & e\notin\mathcal T(\mathbf x).
+    \end{cases}
+\end{equation*}
 
-\vspace{0.5cm}
-% Синий вариант: без общего эксперта
-\textcolor{blue}{%
-\textbf{Архитектура без общего эксперта.} Выход MoE‑слоя формируется как взвешенная сумма выходов экспертов:
-\[
-\mathbf{z} = \sum_{e=1}^E g_e(\mathbf{x}) \,\mathrm{FFN}_e(\mathbf{x})
-\]
-для варианта с softmax-гейтингом, или с \(\tilde{g}_e\) для top‑K гейтинга. Полный вектор параметров модели (одного MoE‑слоя) есть
-\[
-\mathbf{w} = (\mathbf{w}_{\text{exp}}, \mathbf{w}_g),
-\]
-где \(\mathbf{w}_{\text{exp}}\) — параметры всех экспертов, \(\mathbf{w}_g\) — параметры гейтинга.
-}
+\textit{3. Top-$K$ после полного softmax без дополнительной перенормировки.}
+В этом случае сначала вычисляются коэффициенты $g_e(\mathbf x)$ полного softmax, после чего сохраняются только $K$ наибольших коэффициентов:
+\begin{equation*}
+    \hat g_e(\mathbf x)=
+    \begin{cases}
+        g_e(\mathbf x), & e\in\mathcal T(\mathbf x),\\
+        0, & e\notin\mathcal T(\mathbf x).
+    \end{cases}
+\end{equation*}
 
-\vspace{0.5cm}
-% Красный вариант: с общим экспертом
-\textcolor{red}{%
-\textbf{Архитектура с общим экспертом.} Дополнительно к экспертам вводится общий эксперт \(\mathrm{FFN}_{\text{shared}}(\mathbf{x})\), активируемый для всех входов. Выход слоя принимает вид
-\[
-\mathbf{z} = \mathrm{FFN}_{\text{shared}}(\mathbf{x}) + \sum_{e=1}^E g_e(\mathbf{x}) \,\mathrm{FFN}_e(\mathbf{x})
-\]
-для softmax-гейтинга (или с \(\tilde{g}_e\) для top‑K). Параметры общего эксперта обозначим \(\mathbf{w}_{\text{shared}}\). Тогда полный вектор параметров
-\[
-\mathbf{w} = (\mathbf{w}_{\text{exp}}, \mathbf{w}_g, \mathbf{w}_{\text{shared}}).
-\]
-}
+Первые два варианта совпадают после перенормировки на активном множестве, поскольку softmax сохраняет порядок координат. Третий вариант отличается тем, что сумма активных коэффициентов, вообще говоря, меньше единицы.
 
-\vspace{0.5cm}
+\paragraph{Архитектура без общего эксперта.}
+Выход MoE-слоя формируется как взвешенная сумма выходов экспертов:
+\begin{equation*}
+    \mathbf z
+    =
+    \sum\limits_{e=1}^{E}\gamma_e(\mathbf x)\,\mathrm{FFN}_e(\mathbf x),
+\end{equation*}
+где $\gamma_e$ обозначает один из рассмотренных выше вариантов гейтинга. Полный вектор параметров модели имеет вид
+\begin{equation*}
+    \mathbf w=(\mathbf w_{\text{exp}},\mathbf w_g).
+\end{equation*}
+
+В теоретической части ниже для краткости все смещения в экспертных и роутерных блоках опускаются. Это упрощает записи, но не меняет структуры доказательств и порядка получаемых оценок.
 
 \subsection{Функция потерь и матрица Гессе}
 
@@ -134,40 +161,855 @@ g_e(\mathbf{x}) = \frac{\exp\left(\mathbf{a}_e^\top \mathbf{x} + b_e\right)}{\su
 \]
 поскольку остаточная компонента \(\mathbf{R}(\mathbf{w})\) в окрестности минимума мала или ограничена по норме.
 
-\subsection{Предположения}
+\section{Теоретическая часть}
 
-Для получения верхних оценок введём стандартные предположения, аналогичные использованным в диссертации для других архитектур:
+\subsection{Матрично-представимое представление MoE и факторизация гаусс"--~ньютоновской компоненты}
 
-\begin{enumerate}
-    \item \textbf{Ограниченность входных данных:} \(\|\mathbf{x}\|_2 \le B_x\).
-    \item \textbf{Ограниченность весов:}  
-    Для всех экспертов и гейтинга спектральные нормы матриц весов ограничены константой \(B_W\):
-    \[
-    \|\mathbf{W}_e^{(1)}\|_2, \|\mathbf{W}_e^{(2)}\|_2 \le B_W, \quad \|\mathbf{a}_e\|_2 \le B_W \ (\text{или аналогично}).
-    \]
-    Для смещений \(\mathbf{b}\) можно использовать \(\ell_2\)-норму, но они обычно не влияют на оценку главного члена.
-    % \item \textbf{Липшицевость активаций:} \(\mathrm{ReLU}\) и её производная (обобщённая) ограничены по норме: \(\|\mathrm{ReLU}\|_{\mathrm{Lip}} = 1\), \(\|\mathrm{ReLU}'\|_{\infty} \le 1\).
-    \item \textbf{Ограниченность матрицы кривизны потерь:} \(\|\mathbf{A}(\mathbf{w})\|_2 \le M_A\).
-    \item \textbf{Для top‑K гейтинга} дополнительно предполагаем, что рассматриваются точки \(\mathbf{w}\), в которых множество \(\mathcal{T}(\mathbf{x})\) локально постоянно, так что \(\tilde{g}_e\) дифференцируемы. Вне этих областей можно использовать субградиентные оценки или гладкую аппроксимацию.
-\end{enumerate}
+Для получения явной оценки нормы гаусс"--~ньютоновской компоненты удобно использовать представление MoE-слоя как матрично-представимой нейронной сети.
+
+\begin{definition}
+Нейронная сеть называется \emph{матрично-представимой}, если ее выход $\mathbf z=f_{\mathbf w}(\mathbf x)$ для входа $\mathbf x$ может быть записан в виде
+$$
+\mathbf x^{(1)}=\mathbf x,\qquad
+\mathbf z^{(p)}=T^{(p)}_{\mathbf w^{(p)}}(\mathbf x^{(p)}),\qquad
+\mathbf x^{(p+1)}=\sigma^{(p)}(\mathbf z^{(p)}),\qquad p=1,\dots,L-1,
+$$
+$$
+\mathbf z=\mathbf z^{(L)}=T^{(L)}_{\mathbf w^{(L)}}(\mathbf x^{(L)}),
+$$
+где $\mathbf w=\col(\mathbf w^{(1)},\dots,\mathbf w^{(L)})$, а каждый оператор
+$
+T^{(p)}_{\mathbf w^{(p)}}:\mathbb R^{n_{p-1}}\to\mathbb R^{n_p}
+$
+линеен по входу $\mathbf x^{(p)}$.
+\end{definition}
+
+Для каждого слоя введем матрицу распространения возмущения предактивации к выходу сети
+$$
+\mathbf S^{(p)}(\mathbf w)=\frac{\partial \mathbf z}{\partial \mathbf z^{(p)}}
+$$
+и параметрический якобиан слоя
+$$
+\mathbf P^{(p)}(\mathbf w)=\frac{\partial \mathbf z^{(p)}}{\partial \mathbf w^{(p)}}.
+$$
+
+\begin{lemma}
+\label{lem:jacobian-factorization}
+Пусть $f_{\mathbf w}$ является матрично-представимой нейронной сетью. Тогда якобиан выхода сети по параметрам $p$-го слоя факторизуется в виде
+$$
+\mathbf J^{(p)}(\mathbf w)
+=
+\frac{\partial \mathbf z}{\partial \mathbf w^{(p)}}
+=
+\mathbf S^{(p)}(\mathbf w)\mathbf P^{(p)}(\mathbf w).
+$$
+Следовательно,
+$$
+\mathbf J(\mathbf w)
+=
+\bigl[
+\mathbf S^{(1)}(\mathbf w)\mathbf P^{(1)}(\mathbf w),\dots,
+\mathbf S^{(L)}(\mathbf w)\mathbf P^{(L)}(\mathbf w)
+\bigr].
+$$
+\end{lemma}
+
+\begin{proof}
+Утверждение следует из правила дифференцирования сложной функции и блочной структуры вектора параметров $\mathbf w$.
+\end{proof}
+
+\begin{lemma}
+\label{lem:GN-block-factorization}
+Пусть $f_{\mathbf w}$ является матрично-представимой нейронной сетью, а
+$$
+\mathbf G(\mathbf w)=\mathbf J(\mathbf w)^\top \mathbf A(\mathbf w)\mathbf J(\mathbf w)
+$$
+есть гаусс"--~ньютоновская компонента матрицы Гессе. Тогда $\mathbf G(\mathbf w)$ имеет блочную структуру
+$$
+\mathbf G(\mathbf w)=\bigl[\mathbf G^{(p,q)}(\mathbf w)\bigr]_{p,q=1}^L,
+\qquad
+\mathbf G^{(p,q)}(\mathbf w)
+=
+\mathbf P^{(p)}(\mathbf w)^\top
+\mathbf S^{(p)}(\mathbf w)^\top
+\mathbf A(\mathbf w)
+\mathbf S^{(q)}(\mathbf w)
+\mathbf P^{(q)}(\mathbf w).
+$$
+\end{lemma}
+
+\begin{proof}
+Подстановка факторизации из леммы~\ref{lem:jacobian-factorization} в определение $\mathbf G(\mathbf w)$ дает требуемое блочное представление.
+\end{proof}
+
+\subsection{Оценка гаусс"--~ньютоновской компоненты для MoE с softmax-гейтингом}
+
+Рассмотрим один слой смеси экспертов без смещений:
+\begin{equation}
+    \label{eq:moe-model-softmax}
+    \mathbf z
+    =
+    \sum\limits_{e=1}^{E}
+    g_e(\mathbf x)\,
+    \mathbf W_e^{(2)}
+    \ReLU\!\left(\mathbf W_e^{(1)}\mathbf x\right),
+\end{equation}
+где коэффициенты гейтинга определяются формулой
+\begin{equation}
+    \label{eq:moe-softmax-gating}
+    g_e(\mathbf x)
+    =
+    \frac{\exp(\mathbf a_e^\top \mathbf x)}
+    {\sum\limits_{j=1}^{E}\exp(\mathbf a_j^\top \mathbf x)},
+    \qquad e=1,\dots,E.
+\end{equation}
+
+Ниже смещения в экспертных и роутерных блоках опускаются для краткости. Их учет не меняет структуру доказательств и порядок получаемых оценок.
+
+Введем обозначения
+$$
+\mathbf u_e=\mathbf W_e^{(1)}\mathbf x,
+\qquad
+\mathbf r_e=\ReLU(\mathbf u_e),
+\qquad
+\mathbf s=\mathbf U\mathbf x,
+\qquad
+\mathbf U=
+\begin{bmatrix}
+\mathbf a_1^\top\\
+\vdots\\
+\mathbf a_E^\top
+\end{bmatrix}\in\mathbb R^{E\times d}.
+$$
+
+\begin{lemma}
+\label{lem:moe-matricized}
+Модель~\eqref{eq:moe-model-softmax}--\eqref{eq:moe-softmax-gating} является матрично-представимой нейронной сетью глубины $L=2$.
+\end{lemma}
+
+\begin{proof}
+Положим
+$$
+\mathbf z^{(1)}
+=
+\begin{bmatrix}
+\mathbf W_1^{(1)}\mathbf x\\
+\vdots\\
+\mathbf W_E^{(1)}\mathbf x\\
+\mathbf U\mathbf x
+\end{bmatrix}
+\in\mathbb R^{Ed_{\mathrm{ff}}+E}
+$$
+и определим нелинейность
+$$
+\sigma_{\mathrm{MoE}}
+\!\left(
+\begin{bmatrix}
+\mathbf u_1\\
+\vdots\\
+\mathbf u_E\\
+\mathbf s
+\end{bmatrix}
+\right)
+=
+\begin{bmatrix}
+g_1(\mathbf s)\ReLU(\mathbf u_1)\\
+\vdots\\
+g_E(\mathbf s)\ReLU(\mathbf u_E)\\
+\mathbf s
+\end{bmatrix}
+=
+\mathbf x^{(2)},
+$$
+где $g_e(\mathbf s)=\exp(s_e)/\sum_{j=1}^{E}\exp(s_j)$. Тогда
+$$
+\mathbf z
+=
+\begin{bmatrix}
+\mathbf W_1^{(2)} & \cdots & \mathbf W_E^{(2)} & \mathbf 0_{d\times E}
+\end{bmatrix}
+\mathbf x^{(2)},
+$$
+то есть модель является матрично-представимой сетью глубины $L=2$.
+\end{proof}
+
+В силу леммы~\ref{lem:moe-matricized}
+$$
+\mathbf J(\mathbf w)
+=
+\bigl[
+\mathbf J^{(1)}(\mathbf w),\mathbf J^{(2)}(\mathbf w)
+\bigr]
+=
+\bigl[
+\mathbf S^{(1)}(\mathbf w)\mathbf P^{(1)}(\mathbf w),
+\mathbf S^{(2)}(\mathbf w)\mathbf P^{(2)}(\mathbf w)
+\bigr].
+$$
+
+\begin{theorem}
+\label{thm:moe-softmax-G-bound}
+Пусть $f_{\mathbf w}$ является одним слоем смеси экспертов вида~\eqref{eq:moe-model-softmax}--\eqref{eq:moe-softmax-gating}. Предположим, что существуют положительные константы $M_{\mathbf x}, M_{\mathbf A}, M_1, M_2$ такие, что
+\begin{equation}
+    \label{eq:moe-softmax-assumptions}
+    \|\mathbf x\|_2 \le M_{\mathbf x},
+    \qquad
+    \|\mathbf A(\mathbf w)\|_2 \le M_{\mathbf A},
+    \qquad
+    \|\mathbf W_e^{(1)}\|_2 \le M_1,
+    \qquad
+    \|\mathbf W_e^{(2)}\|_2 \le M_2,
+    \qquad e=1,\dots,E.
+\end{equation}
+Тогда для гаусс"--~ньютоновской компоненты выполняется оценка
+\begin{equation}
+    \label{eq:moe-softmax-G-bound}
+    \|\mathbf G(\mathbf w)\|_2
+    \le
+    M_{\mathbf A}M_{\mathbf x}^2
+    \left(
+        M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+    \right).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+\textbf{Оценка $\mathbf P^{(1)}(\mathbf w)$.}
+Пусть
+$$
+\mathbf w^{(1)}
+=
+\col\!\left(
+\mathbf W_1^{(1)},\ldots,\mathbf W_E^{(1)},
+\mathbf a_1,\ldots,\mathbf a_E
+\right).
+$$
+Тогда для произвольного приращения $\Delta\mathbf w^{(1)}$ имеем
+$$
+\mathbf P^{(1)}(\mathbf w)\Delta\mathbf w^{(1)}
+=
+\begin{bmatrix}
+\Delta\mathbf W_1^{(1)}\mathbf x\\
+\vdots\\
+\Delta\mathbf W_E^{(1)}\mathbf x\\
+\Delta\mathbf U\mathbf x
+\end{bmatrix},
+\qquad
+\Delta\mathbf U=
+\begin{bmatrix}
+\Delta\mathbf a_1^\top\\
+\vdots\\
+\Delta\mathbf a_E^\top
+\end{bmatrix}.
+$$
+Следовательно,
+$$
+\begin{aligned}
+\|\mathbf P^{(1)}(\mathbf w)\Delta\mathbf w^{(1)}\|_2^2
+&=
+\sum\limits_{e=1}^{E}\|\Delta\mathbf W_e^{(1)}\mathbf x\|_2^2
++
+\|\Delta\mathbf U\mathbf x\|_2^2 \\
+&\le
+\|\mathbf x\|_2^2
+\left(
+\sum\limits_{e=1}^{E}\|\Delta\mathbf W_e^{(1)}\|_F^2
++
+\|\Delta\mathbf U\|_F^2
+\right)
+=
+\|\mathbf x\|_2^2\|\Delta\mathbf w^{(1)}\|_2^2.
+\end{aligned}
+$$
+Отсюда
+$$
+\|\mathbf P^{(1)}(\mathbf w)\|_2\le M_{\mathbf x}.
+$$
+
+\textbf{Оценка $\mathbf P^{(2)}(\mathbf w)$.}
+Поскольку
+$$
+\mathbf x^{(2)}
+=
+\begin{bmatrix}
+g_1(\mathbf s)\mathbf r_1\\
+\vdots\\
+g_E(\mathbf s)\mathbf r_E\\
+\mathbf s
+\end{bmatrix},
+$$
+а последние $E$ координат умножаются на нулевой блок, имеем
+$$
+\mathbf P^{(2)}(\mathbf w)\Delta\mathbf w^{(2)}
+=
+\sum\limits_{e=1}^{E}\Delta\mathbf W_e^{(2)}\bigl(g_e(\mathbf s)\mathbf r_e\bigr).
+$$
+Поэтому
+$$
+\|\mathbf P^{(2)}(\mathbf w)\|_2
+=
+\left(
+\sum\limits_{e=1}^{E}g_e(\mathbf s)^2\|\mathbf r_e\|_2^2
+\right)^{1/2}.
+$$
+Так как
+$$
+\|\mathbf r_e\|_2
+\le
+\|\mathbf u_e\|_2
+\le
+\|\mathbf W_e^{(1)}\|_2\|\mathbf x\|_2
+\le
+M_1M_{\mathbf x},
+$$
+получаем
+$$
+\|\mathbf P^{(2)}(\mathbf w)\|_2
+\le
+\left(
+\sum\limits_{e=1}^{E}g_e(\mathbf s)^2(M_1M_{\mathbf x})^2
+\right)^{1/2}
+\le
+M_1M_{\mathbf x},
+$$
+поскольку $\sum_{e=1}^{E}g_e(\mathbf s)^2\le 1$.
+
+\textbf{Оценка $\mathbf S^{(2)}(\mathbf w)$.}
+Так как $\mathbf z=\mathbf z^{(2)}$, имеем
+$$
+\mathbf S^{(2)}(\mathbf w)=\mathbf I_d,
+\qquad
+\|\mathbf S^{(2)}(\mathbf w)\|_2=1.
+$$
+
+\textbf{Оценка $\mathbf S^{(1)}(\mathbf w)$.}
+Рассмотрим произвольное возмущение
+$$
+\Delta\mathbf z^{(1)}
+=
+\begin{bmatrix}
+\Delta\mathbf u_1\\
+\vdots\\
+\Delta\mathbf u_E\\
+\Delta\mathbf s
+\end{bmatrix},
+\qquad
+\Delta\mathbf z=\Delta\mathbf z_{\mathbf u}+\Delta\mathbf z_{\mathbf s}.
+$$
+
+Для первого слагаемого положим
+$
+\mathbf D_e=\operatorname{diag}(\ReLU'(\mathbf u_e))
+$.
+Тогда почти всюду $\|\mathbf D_e\|_2\le 1$, и
+$$
+\Delta\mathbf z_{\mathbf u}
+=
+\sum\limits_{e=1}^{E}
+g_e(\mathbf s)\mathbf W_e^{(2)}\mathbf D_e\Delta\mathbf u_e.
+$$
+Следовательно,
+$$
+\begin{aligned}
+\|\Delta\mathbf z_{\mathbf u}\|_2
+&\le
+\sum\limits_{e=1}^{E}
+g_e(\mathbf s)\|\mathbf W_e^{(2)}\|_2\|\mathbf D_e\|_2\|\Delta\mathbf u_e\|_2 \\
+&\le
+M_2\sum\limits_{e=1}^{E}g_e(\mathbf s)\|\Delta\mathbf u_e\|_2
+\le
+M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}.
+\end{aligned}
+$$
+
+Для второго слагаемого обозначим
+$
+\mathbf y_e=\mathbf W_e^{(2)}\mathbf r_e
+$.
+Тогда
+$$
+\|\mathbf y_e\|_2
+\le
+\|\mathbf W_e^{(2)}\|_2\|\mathbf r_e\|_2
+\le
+M_1M_2M_{\mathbf x}.
+$$
+Кроме того,
+$$
+\Delta g_e
+=
+g_e(\mathbf s)
+\left(
+\Delta s_e-\sum\limits_{j=1}^{E}g_j(\mathbf s)\Delta s_j
+\right).
+$$
+Обозначим
+$
+\overline{\Delta s}=\sum_{j=1}^{E}g_j(\mathbf s)\Delta s_j
+$.
+Тогда
+$$
+\Delta\mathbf z_{\mathbf s}
+=
+\sum\limits_{e=1}^{E}
+g_e(\mathbf s)\bigl(\Delta s_e-\overline{\Delta s}\bigr)\mathbf y_e,
+$$
+и потому
+$$
+\begin{aligned}
+\|\Delta\mathbf z_{\mathbf s}\|_2
+&\le
+\sum\limits_{e=1}^{E}
+g_e(\mathbf s)|\Delta s_e-\overline{\Delta s}|\|\mathbf y_e\|_2 \\
+&\le
+M_1M_2M_{\mathbf x}
+\sum\limits_{e=1}^{E}g_e(\mathbf s)|\Delta s_e-\overline{\Delta s}| \\
+&\le
+M_1M_2M_{\mathbf x}
+\left(
+\sum\limits_{e=1}^{E}g_e(\mathbf s)(\Delta s_e-\overline{\Delta s})^2
+\right)^{1/2}
+\le
+M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2.
+\end{aligned}
+$$
+
+Итак,
+$$
+\|\Delta\mathbf z\|_2
+\le
+M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}
++
+M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2.
+$$
+По неравенству Коши--Буняковского отсюда следует
+$$
+\|\Delta\mathbf z\|_2
+\le
+M_2\sqrt{1+M_1^2M_{\mathbf x}^2}
+\left(
+\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2+\|\Delta\mathbf s\|_2^2
+\right)^{1/2},
+$$
+то есть
+$$
+\|\mathbf S^{(1)}(\mathbf w)\|_2
+\le
+M_2\sqrt{1+M_1^2M_{\mathbf x}^2}.
+$$
+
+\textbf{Завершение доказательства.}
+Полученные оценки дают
+$$
+\|\mathbf J^{(1)}(\mathbf w)\|_2
+\le
+M_2M_{\mathbf x}\sqrt{1+M_1^2M_{\mathbf x}^2},
+\qquad
+\|\mathbf J^{(2)}(\mathbf w)\|_2
+\le
+M_1M_{\mathbf x}.
+$$
+Следовательно,
+$$
+\begin{aligned}
+\|\mathbf J(\mathbf w)\|_2^2
+&=
+\|\mathbf J(\mathbf w)\mathbf J(\mathbf w)^\top\|_2 \\
+&\le
+\|\mathbf J^{(1)}(\mathbf w)\|_2^2+\|\mathbf J^{(2)}(\mathbf w)\|_2^2 \\
+&\le
+M_2^2M_{\mathbf x}^2(1+M_1^2M_{\mathbf x}^2)+M_1^2M_{\mathbf x}^2 \\
+&=
+M_{\mathbf x}^2\left(M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2\right).
+\end{aligned}
+$$
+Так как
+$
+\|\mathbf G(\mathbf w)\|_2
+\le
+\|\mathbf A(\mathbf w)\|_2\,\|\mathbf J(\mathbf w)\|_2^2
+$,
+из~\eqref{eq:moe-softmax-assumptions} получаем~\eqref{eq:moe-softmax-G-bound}.
+\end{proof}
+
+\begin{remark}
+Если оценивать матрицу распространения первого слоя грубо через норму конкатенированного выходного оператора, то
+$$
+\left\|
+\begin{bmatrix}
+\mathbf W_1^{(2)} & \cdots & \mathbf W_E^{(2)}
+\end{bmatrix}
+\right\|_2
+\le
+\sqrt{E}\,M_2,
+$$
+и потому
+$$
+\|\mathbf G(\mathbf w)\|_2
+\le
+M_{\mathbf A}M_{\mathbf x}^2
+\left(
+M_1^2+EM_2^2+EM_1^2M_2^2M_{\mathbf x}^2
+\right).
+$$
+Таким образом, аккуратный анализ softmax-структуры устраняет множитель $E$ из улучшенной оценки, тогда как прямое огрубление через норму конкатенированного оператора его сохраняет.
+\end{remark}
+
+\subsection{Следствия для разреженных вариантов softmax-гейтинга}
+
+Ниже рассматриваются разреженные варианты маршрутизации, возникающие из softmax-гейтинга. При фиксированном входе $\mathbf x$ активное множество определяется параметрами роутера; условие строгого разделения логитов обеспечивает его локальную постоянность в окрестности рассматриваемого параметра $\mathbf w$.
+
+\begin{corollary}
+\label{cor:moe-topk-G-bound}
+Пусть $f_{\mathbf w}$ является одним слоем смеси экспертов вида~\eqref{eq:moe-model-softmax}, в котором множество активных экспертов состоит из $K$ индексов, соответствующих наибольшим значениям логитов
+$
+s_e(\mathbf x)=\mathbf a_e^\top\mathbf x
+$,
+а коэффициенты гейтинга задаются формулой
+\begin{equation}
+    \label{eq:moe-topk-gating}
+    \tilde g_e(\mathbf x)=
+    \begin{cases}
+        \dfrac{\exp(s_e(\mathbf x))}
+        {\sum\limits_{j\in\mathcal T(\mathbf x)}\exp(s_j(\mathbf x))},
+        & e\in\mathcal T(\mathbf x),\\[1.2ex]
+        0, & e\notin\mathcal T(\mathbf x).
+    \end{cases}
+\end{equation}
+Предположим, что выполнены условия~\eqref{eq:moe-softmax-assumptions}. Пусть, кроме того, в рассматриваемой точке выполнено условие строгого разделения
+\begin{equation}
+    \label{eq:topk-gap-condition}
+    s_{(K)}(\mathbf x)>s_{(K+1)}(\mathbf x),
+\end{equation}
+где $s_{(1)}(\mathbf x)\ge\dots\ge s_{(E)}(\mathbf x)$ --- логиты роутера, упорядоченные по невозрастанию. Тогда в некоторой окрестности рассматриваемого параметра $\mathbf w$ активное множество $\mathcal T(\mathbf x)$ постоянно, и для гаусс"--~ньютоновской компоненты выполняется оценка
+\begin{equation}
+    \label{eq:moe-topk-G-bound}
+    \|\mathbf G(\mathbf w)\|_2
+    \le
+    M_{\mathbf A}M_{\mathbf x}^2
+    \left(
+        M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+    \right).
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Условие~\eqref{eq:topk-gap-condition} обеспечивает локальную постоянность активного множества. Зафиксируем его и обозначим через $\mathcal T$.
+
+На этой окрестности модель совпадает с гладкой MoE-архитектурой, где softmax вычисляется только по индексам из $\mathcal T$. Поэтому доказательство повторяет доказательство теоремы~\ref{thm:moe-softmax-G-bound} после замены сумм по $e=1,\dots,E$ на суммы по $e\in\mathcal T$ и коэффициентов $g_e$ на $\tilde g_e$.
+
+При этом оценка для $\mathbf P^{(1)}(\mathbf w)$ не меняется, а для $\mathbf P^{(2)}(\mathbf w)$ имеем
+$$
+\|\mathbf P^{(2)}(\mathbf w)\|_2
+=
+\left(
+\sum\limits_{e\in\mathcal T}\tilde g_e(\mathbf s)^2\|\mathbf r_e\|_2^2
+\right)^{1/2}
+\le
+M_1M_{\mathbf x},
+$$
+поскольку $\sum_{e\in\mathcal T}\tilde g_e(\mathbf s)^2\le 1$.
+
+Аналогично,
+$$
+\|\Delta\mathbf z_{\mathbf u}\|_2
+\le
+M_2\left(\sum\limits_{e\in\mathcal T}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}
+\le
+M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2},
+$$
+а для возмущения коэффициентов гейтинга сохраняется оценка
+$$
+\|\Delta\mathbf z_{\mathbf s}\|_2
+\le
+M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2.
+$$
+Следовательно,
+$$
+\|\mathbf S^{(1)}(\mathbf w)\|_2
+\le
+M_2\sqrt{1+M_1^2M_{\mathbf x}^2}.
+$$
+Тем самым оценки для $\|\mathbf J^{(1)}(\mathbf w)\|_2$, $\|\mathbf J^{(2)}(\mathbf w)\|_2$ и $\|\mathbf J(\mathbf w)\|_2^2$ совпадают с оценками из доказательства теоремы~\ref{thm:moe-softmax-G-bound}, откуда и следует~\eqref{eq:moe-topk-G-bound}.
+\end{proof}
+
+\begin{remark}
+Следствие~\ref{cor:moe-topk-G-bound} охватывает маршрутирование, в котором сначала выбираются top-$K$ логитов роутера, а затем softmax вычисляется только на активном множестве. Такой механизм используется например в Mixtral \cite{Mixtral2024}.
+\end{remark}
+
+\begin{remark}
+Если сначала вычисляется полный softmax по всем экспертам, затем сохраняются top-$K$ коэффициентов и выполняется перенормировка на активном множестве, то получающиеся веса совпадают с~\eqref{eq:moe-topk-gating}. Действительно, softmax сохраняет порядок координат, а для $e\in\mathcal T(\mathbf x)$ имеем
+$$
+\frac{g_e(\mathbf x)}{\sum\limits_{j\in\mathcal T(\mathbf x)}g_j(\mathbf x)}
+=
+\frac{\exp(s_e(\mathbf x))}{\sum\limits_{j\in\mathcal T(\mathbf x)}\exp(s_j(\mathbf x))}.
+$$
+Следовательно, следствие~\ref{cor:moe-topk-G-bound} покрывает оба эквивалентных варианта:
+«top-$K$ по логитам, затем softmax на активном множестве» и
+«полный softmax, затем top-$K$ и перенормировка».
+\end{remark}
+
+\begin{remark}
+Если в случае top-$K$-гейтинга оценивать матрицу распространения первого слоя грубо через норму конкатенированного выходного оператора по активным экспертам, то
+$$
+\left\|
+\begin{bmatrix}
+\mathbf W_e^{(2)}
+\end{bmatrix}_{e\in\mathcal T}
+\right\|_2
+\le
+\sqrt{K}\,M_2.
+$$
+Тогда получаем более слабую, но явную по числу активных экспертов оценку
+$$
+\|\mathbf G(\mathbf w)\|_2
+\le
+M_{\mathbf A}M_{\mathbf x}^2
+\left(
+M_1^2+KM_2^2+KM_1^2M_2^2M_{\mathbf x}^2
+\right).
+$$
+Таким образом, аккуратный анализ softmax-структуры на фиксированном активном множестве устраняет явную зависимость от $K$ из улучшенной оценки, тогда как прямое огрубление через норму конкатенированного оператора ее сохраняет.
+\end{remark}
+
+\begin{corollary}
+\label{cor:moe-postsoftmax-topk-no-renorm}
+Пусть $f_{\mathbf w}$ является одним слоем смеси экспертов вида~\eqref{eq:moe-model-softmax}, в котором сначала вычисляются softmax-коэффициенты~\eqref{eq:moe-softmax-gating}, а затем применяется top-$K$-отбор без дополнительной перенормировки:
+\begin{equation}
+    \label{eq:moe-postsoftmax-topk-no-renorm}
+    \hat g_e(\mathbf x)=
+    \begin{cases}
+        g_e(\mathbf x), & e\in\mathcal T(\mathbf x),\\
+        0, & e\notin\mathcal T(\mathbf x).
+    \end{cases}
+\end{equation}
+Здесь $\mathcal T(\mathbf x)$ есть множество $K$ индексов, соответствующих наибольшим значениям логитов $s_e(\mathbf x)=\mathbf a_e^\top\mathbf x$. Предположим, что выполнены условия~\eqref{eq:moe-softmax-assumptions}. Пусть, кроме того, выполнено условие строгого разделения~\eqref{eq:topk-gap-condition}. Тогда в некоторой окрестности рассматриваемого параметра $\mathbf w$ активное множество $\mathcal T(\mathbf x)$ постоянно, и для гаусс"--~ньютоновской компоненты выполняется оценка
+\begin{equation}
+    \label{eq:moe-postsoftmax-topk-no-renorm-bound}
+    \|\mathbf G(\mathbf w)\|_2
+    \le
+    M_{\mathbf A}M_{\mathbf x}^2
+    \left(
+        M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+    \right).
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Условие~\eqref{eq:topk-gap-condition} обеспечивает локальную постоянность активного множества. Зафиксируем его и обозначим через $\mathcal T$.
+
+На этой окрестности выход модели имеет вид
+$$
+\mathbf z
+=
+\sum\limits_{e=1}^{E}\hat g_e(\mathbf x)\mathbf W_e^{(2)}\ReLU\!\left(\mathbf W_e^{(1)}\mathbf x\right)
+=
+\sum\limits_{e\in\mathcal T}g_e(\mathbf x)\mathbf W_e^{(2)}\ReLU\!\left(\mathbf W_e^{(1)}\mathbf x\right).
+$$
+
+Оценка для $\mathbf P^{(1)}(\mathbf w)$ остается прежней:
+$$
+\|\mathbf P^{(1)}(\mathbf w)\|_2\le M_{\mathbf x}.
+$$
+Для $\mathbf P^{(2)}(\mathbf w)$ имеем
+$$
+\|\mathbf P^{(2)}(\mathbf w)\|_2
+=
+\left(
+\sum\limits_{e\in\mathcal T}g_e(\mathbf s)^2\|\mathbf r_e\|_2^2
+\right)^{1/2}
+\le
+M_1M_{\mathbf x},
+$$
+поскольку
+$
+\sum_{e\in\mathcal T}g_e(\mathbf s)^2\le \sum_{e=1}^{E}g_e(\mathbf s)^2\le 1
+$.
+Кроме того,
+$$
+\|\mathbf S^{(2)}(\mathbf w)\|_2=1.
+$$
+
+Для оценки $\mathbf S^{(1)}(\mathbf w)$ рассмотрим возмущение
+$$
+\Delta\mathbf z^{(1)}
+=
+\begin{bmatrix}
+\Delta\mathbf u_1\\
+\vdots\\
+\Delta\mathbf u_E\\
+\Delta\mathbf s
+\end{bmatrix},
+\qquad
+\Delta\mathbf z=\Delta\mathbf z_{\mathbf u}+\Delta\mathbf z_{\mathbf s}.
+$$
+Тогда
+$$
+\Delta\mathbf z_{\mathbf u}
+=
+\sum\limits_{e\in\mathcal T}
+g_e(\mathbf s)\mathbf W_e^{(2)}\mathbf D_e\Delta\mathbf u_e,
+\qquad
+\mathbf D_e=\operatorname{diag}(\ReLU'(\mathbf u_e)),
+\qquad
+\|\mathbf D_e\|_2\le 1,
+$$
+и потому
+$$
+\|\Delta\mathbf z_{\mathbf u}\|_2
+\le
+M_2\left(\sum\limits_{e\in\mathcal T}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}
+\le
+M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}.
+$$
+
+Далее, если обозначить $\mathbf y_e=\mathbf W_e^{(2)}\mathbf r_e$, то
+$
+\|\mathbf y_e\|_2\le M_1M_2M_{\mathbf x}
+$,
+а из~\eqref{eq:moe-postsoftmax-topk-no-renorm} следует, что для $e\in\mathcal T$
+$$
+\Delta \hat g_e
+=
+\Delta g_e
+=
+g_e(\mathbf s)
+\left(
+\Delta s_e-\sum\limits_{j=1}^{E}g_j(\mathbf s)\Delta s_j
+\right).
+$$
+Обозначив
+$
+\overline{\Delta s}=\sum_{j=1}^{E}g_j(\mathbf s)\Delta s_j
+$,
+получаем
+$$
+\Delta\mathbf z_{\mathbf s}
+=
+\sum\limits_{e\in\mathcal T}
+g_e(\mathbf s)\bigl(\Delta s_e-\overline{\Delta s}\bigr)\mathbf y_e,
+$$
+откуда
+$$
+\begin{aligned}
+\|\Delta\mathbf z_{\mathbf s}\|_2
+&\le
+\sum\limits_{e\in\mathcal T}g_e(\mathbf s)|\Delta s_e-\overline{\Delta s}|\|\mathbf y_e\|_2 \\
+&\le
+M_1M_2M_{\mathbf x}
+\sum\limits_{e\in\mathcal T}g_e(\mathbf s)|\Delta s_e-\overline{\Delta s}| \\
+&\le
+M_1M_2M_{\mathbf x}
+\left(
+\sum\limits_{e=1}^{E}g_e(\mathbf s)(\Delta s_e-\overline{\Delta s})^2
+\right)^{1/2}
+\le
+M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2.
+\end{aligned}
+$$
+
+Следовательно,
+$$
+\|\Delta\mathbf z\|_2
+\le
+M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}
++
+M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2,
+$$
+а значит,
+$$
+\|\mathbf S^{(1)}(\mathbf w)\|_2
+\le
+M_2\sqrt{1+M_1^2M_{\mathbf x}^2}.
+$$
+
+Тем самым
+$$
+\|\mathbf J^{(1)}(\mathbf w)\|_2
+\le
+M_2M_{\mathbf x}\sqrt{1+M_1^2M_{\mathbf x}^2},
+\qquad
+\|\mathbf J^{(2)}(\mathbf w)\|_2
+\le
+M_1M_{\mathbf x},
+$$
+и потому
+$$
+\|\mathbf J(\mathbf w)\|_2^2
+\le
+M_{\mathbf x}^2
+\left(
+M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+\right).
+$$
+Используя неравенство
+$
+\|\mathbf G(\mathbf w)\|_2
+\le
+\|\mathbf A(\mathbf w)\|_2\,\|\mathbf J(\mathbf w)\|_2^2
+$,
+получаем~\eqref{eq:moe-postsoftmax-topk-no-renorm-bound}.
+\end{proof}
 
 \begin{thebibliography}{99}
 
-\bibitem{Vapnik1995} Vapnik V. N. The Nature of Statistical Learning Theory. -- Springer, 1995.
-\bibitem{Kaplan2020} Kaplan J. et al. Scaling laws for neural language models // arXiv:2001.08361. 2020.
-\bibitem{Hoffmann2022} Hoffmann J. et al. Training compute-optimal large language models // NeurIPS. 2022.
-\bibitem{Li2018} Li H. et al. Visualizing the loss landscape of neural nets // NeurIPS. 2018.
-\bibitem{Fort2019} Fort S., Ganguli S. Emergent properties of the local geometry of neural loss landscapes // arXiv:1910.05929. 2019.
-\bibitem{Papyan2019} Papyan V. Measurements of three-level hierarchical structure in the outliers in the spectrum of deepnet Hessians // ICML. 2019.
-\bibitem{Motrenko2014} Motrenko A., Strijov V. Sample size estimation for logistic regression using cross-validation and Kullback–Leibler divergence // JMLR. 2014.
-\bibitem{Bishop2006} Bishop C. M. Pattern Recognition and Machine Learning. -- Springer, 2006.
-\bibitem{Jacobs1991} Jacobs R. A. et al. Adaptive mixtures of local experts // Neural Computation. 1991.
-\bibitem{Shazeer2017} Shazeer N. et al. Outrageously large neural networks: The sparsely-gated mixture-of-experts layer // ICLR. 2017.
-\bibitem{Ghorbani2019} Ghorbani B., Krishnan S., Xiao Y. An investigation into neural net optimization via Hessian eigenvalue density // ICML. 2019.
-\bibitem{Granziol2021} Granziol D., Zohren S., Roberts S. Hessian Eigenspectra of More Realistic Nonlinear Models // NeurIPS. 2021.
-\bibitem{Kiselev2024} Kiselev N. S., Grabovoy A. V. Unraveling the Hessian: A Key to Smooth Convergence in Loss Function Landscapes // Doklady Mathematics. 2024.
-\bibitem{Meshkov2024} Meshkov V., Kiselev N., Grabovoy A. ConvNets Landscape Convergence: Hessian-Based Analysis of Matricized Networks // ISPRAS Open Conference. 2024.
+\bibitem{Jacobs1991}
+Jacobs R. A., Jordan M. I., Nowlan S. J., Hinton G. E.
+Adaptive mixtures of local experts // Neural Computation. 1991. Vol.~3, No.~1. P.~79--87.
+
+\bibitem{Shazeer2017}
+Shazeer N., Mirhoseini A., Maziarz K., Davis A., Le Q. V., Hinton G., Dean J.
+Outrageously large neural networks: The sparsely-gated mixture-of-experts layer // ICLR. 2017.
+
+\bibitem{Papyan2019}
+Papyan V.
+Measurements of three-level hierarchical structure in the outliers in the spectrum of deepnet Hessians // ICML. 2019.
+
+\bibitem{Fort2019}
+Fort S., Ganguli S.
+Emergent properties of the local geometry of neural loss landscapes // arXiv:1910.05929. 2019.
+
+\bibitem{Kiselev2024}
+Kiselev N. S., Grabovoy A. V.
+Unraveling the Hessian: A Key to Smooth Convergence in Loss Function Landscapes // Doklady Mathematics. 2024.
+
+\bibitem{Meshkov2024}
+Meshkov V., Kiselev N., Grabovoy A.
+ConvNets Landscape Convergence: Hessian-Based Analysis of Matricized Networks // 2024 Ivannikov ISPRAS Open Conference. 2024.
+
+\bibitem{Fedus2021}
+Fedus W., Zoph B., Shazeer N.
+Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity //
+JMLR. 2022. Vol.~23, No.~120. P.~1--39.
+
+\bibitem{Mixtral2024}
+Jiang A. Q., Sablayrolles A., Roux A., et al.
+Mixtral of Experts // arXiv:2401.04088. 2024.
+
+\bibitem{DeepSeekV3}
+DeepSeek-AI, Liu A., Feng B., et al.
+DeepSeek-V3 Technical Report // arXiv:2412.19437. 2025.
 
 \end{thebibliography}
+
+
+% \begin{thebibliography}{99}
+
+% \bibitem{Vapnik1995} Vapnik V. N. The Nature of Statistical Learning Theory. -- Springer, 1995.
+% \bibitem{Kaplan2020} Kaplan J. et al. Scaling laws for neural language models // arXiv:2001.08361. 2020.
+% \bibitem{Hoffmann2022} Hoffmann J. et al. Training compute-optimal large language models // NeurIPS. 2022.
+% \bibitem{Li2018} Li H. et al. Visualizing the loss landscape of neural nets // NeurIPS. 2018.
+% \bibitem{Fort2019} Fort S., Ganguli S. Emergent properties of the local geometry of neural loss landscapes // arXiv:1910.05929. 2019.
+% \bibitem{Papyan2019} Papyan V. Measurements of three-level hierarchical structure in the outliers in the spectrum of deepnet Hessians // ICML. 2019.
+% \bibitem{Motrenko2014} Motrenko A., Strijov V. Sample size estimation for logistic regression using cross-validation and Kullback–Leibler divergence // JMLR. 2014.
+% \bibitem{Bishop2006} Bishop C. M. Pattern Recognition and Machine Learning. -- Springer, 2006.
+% \bibitem{Jacobs1991} Jacobs R. A. et al. Adaptive mixtures of local experts // Neural Computation. 1991.
+% \bibitem{Shazeer2017} Shazeer N. et al. Outrageously large neural networks: The sparsely-gated mixture-of-experts layer // ICLR. 2017.
+% \bibitem{Ghorbani2019} Ghorbani B., Krishnan S., Xiao Y. An investigation into neural net optimization via Hessian eigenvalue density // ICML. 2019.
+% \bibitem{Granziol2021} Granziol D., Zohren S., Roberts S. Hessian Eigenspectra of More Realistic Nonlinear Models // NeurIPS. 2021.
+% \bibitem{Kiselev2024} Kiselev N. S., Grabovoy A. V. Unraveling the Hessian: A Key to Smooth Convergence in Loss Function Landscapes // Doklady Mathematics. 2024.
+% \bibitem{Meshkov2024} Meshkov V., Kiselev N., Grabovoy A. ConvNets Landscape Convergence: Hessian-Based Analysis of Matricized Networks // ISPRAS Open Conference. 2024.
+
+% \end{thebibliography}
 
 \end{document}
