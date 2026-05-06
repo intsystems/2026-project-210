@@ -13,6 +13,23 @@
 \usepackage{indentfirst}
 \usepackage{cite}
 \usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{placeins}
+
+\captionsetup{
+    font=small,
+    labelfont=bf,
+    justification=justified,
+    singlelinecheck=true
+}
+
+\captionsetup[subfigure]{
+    font=small,
+    labelfont=normal,
+    justification=centering,
+    singlelinecheck=true
+}
 
 
 \usepackage{bm}
@@ -21,13 +38,19 @@
 \DeclareMathOperator{\ReLU}{ReLU}
 \DeclareMathOperator{\col}{col}
 
-\newtheorem{theorem}{Теорема}[section]
-\newtheorem{lemma}[theorem]{Лемма}
-\newtheorem{corollary}[theorem]{Следствие}
+\newtheorem{theorem}{Теорема}
+\newtheorem{lemma}{Лемма}
 \theoremstyle{definition}
-\newtheorem{definition}[theorem]{Определение}
+\newtheorem{definition}{Определение}
+
+\newcounter{theoremchild}[theorem]
+\renewcommand{\thetheoremchild}{\thetheorem.\arabic{theoremchild}}
+
+\theoremstyle{plain}
+\newtheorem{corollary}[theoremchild]{Следствие}
+
 \theoremstyle{remark}
-\newtheorem{remark}[theorem]{Замечание}
+\newtheorem{remark}[theoremchild]{Замечание}
 
 \begin{document}
 
@@ -272,14 +295,14 @@ $$
 \qquad
 \mathbf r_e=\ReLU(\mathbf u_e),
 \qquad
-\mathbf s=\mathbf U\mathbf x,
+\mathbf s=\mathbf B\mathbf x,
 \qquad
-\mathbf U=
+\mathbf B=
 \begin{bmatrix}
 \mathbf a_1^\top\\
 \vdots\\
 \mathbf a_E^\top
-\end{bmatrix}\in\mathbb R^{E\times d}.
+\end{bmatrix}\in\mathbb R^{E\times d}
 $$
 
 \begin{lemma}
@@ -296,7 +319,7 @@ $$
 \mathbf W_1^{(1)}\mathbf x\\
 \vdots\\
 \mathbf W_E^{(1)}\mathbf x\\
-\mathbf U\mathbf x
+\mathbf B\mathbf x
 \end{bmatrix}
 \in\mathbb R^{Ed_{\mathrm{ff}}+E}
 $$
@@ -348,7 +371,7 @@ $$
 $$
 
 \begin{theorem}
-\label{thm:moe-softmax-G-bound}
+\label{thm:moe-softmax-G-bound-improved}
 Пусть $f_{\mathbf w}$ является одним слоем смеси экспертов вида~\eqref{eq:moe-model-softmax}--\eqref{eq:moe-softmax-gating}. Предположим, что существуют положительные константы $M_{\mathbf x}, M_{\mathbf A}, M_1, M_2$ такие, что
 \begin{equation}
     \label{eq:moe-softmax-assumptions}
@@ -361,19 +384,29 @@ $$
     \|\mathbf W_e^{(2)}\|_2 \le M_2,
     \qquad e=1,\dots,E.
 \end{equation}
+Обозначим
+$
+    S_g(\mathbf x)=\sum\limits_{e=1}^{E}g_e(\mathbf x)^2.
+$
 Тогда для гаусс"--~ньютоновской компоненты выполняется оценка
 \begin{equation}
     \label{eq:moe-softmax-G-bound}
     \|\mathbf G(\mathbf w)\|_2
     \le
-    M_{\mathbf A}M_{\mathbf x}^2
+    M_{\mathbf A}M_{\mathbf x}^2S_g(\mathbf x)
     \left(
-        M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+        M_1^2+M_2^2+4M_1^2M_2^2M_{\mathbf x}^2
     \right).
 \end{equation}
 \end{theorem}
-
 \begin{proof}
+Для краткости пишем
+$
+    g_e=g_e(\mathbf s)=g_e(\mathbf x),
+    \quad
+    S_g=S_g(\mathbf x).
+$
+
 \textbf{Оценка $\mathbf P^{(1)}(\mathbf w)$.}
 Пусть
 $$
@@ -392,10 +425,10 @@ $$
 \Delta\mathbf W_1^{(1)}\mathbf x\\
 \vdots\\
 \Delta\mathbf W_E^{(1)}\mathbf x\\
-\Delta\mathbf U\mathbf x
+\Delta\mathbf B\mathbf x
 \end{bmatrix},
 \qquad
-\Delta\mathbf U=
+\Delta\mathbf B=
 \begin{bmatrix}
 \Delta\mathbf a_1^\top\\
 \vdots\\
@@ -409,22 +442,18 @@ $$
 &=
 \sum\limits_{e=1}^{E}\|\Delta\mathbf W_e^{(1)}\mathbf x\|_2^2
 +
-\|\Delta\mathbf U\mathbf x\|_2^2 \\
-&\le
+\|\Delta\mathbf B\mathbf x\|_2^2\leq
 \|\mathbf x\|_2^2
 \left(
 \sum\limits_{e=1}^{E}\|\Delta\mathbf W_e^{(1)}\|_F^2
 +
-\|\Delta\mathbf U\|_F^2
+\|\Delta\mathbf B\|_F^2
 \right)
 =
 \|\mathbf x\|_2^2\|\Delta\mathbf w^{(1)}\|_2^2.
 \end{aligned}
 $$
-Отсюда
-$$
-\|\mathbf P^{(1)}(\mathbf w)\|_2\le M_{\mathbf x}.
-$$
+Отсюда $\|\mathbf P^{(1)}(\mathbf w)\|_2\le M_{\mathbf x}.$
 
 \textbf{Оценка $\mathbf P^{(2)}(\mathbf w)$.}
 Поскольку
@@ -432,28 +461,52 @@ $$
 \mathbf x^{(2)}
 =
 \begin{bmatrix}
-g_1(\mathbf s)\mathbf r_1\\
+g_1\mathbf r_1\\
 \vdots\\
-g_E(\mathbf s)\mathbf r_E\\
+g_E\mathbf r_E\\
 \mathbf s
 \end{bmatrix},
 $$
 а последние $E$ координат умножаются на нулевой блок, имеем
-$$
+$
 \mathbf P^{(2)}(\mathbf w)\Delta\mathbf w^{(2)}
 =
-\sum\limits_{e=1}^{E}\Delta\mathbf W_e^{(2)}\bigl(g_e(\mathbf s)\mathbf r_e\bigr).
+\sum\limits_{e=1}^{E}
+\Delta\mathbf W_e^{(2)}(g_e\mathbf r_e).
+$
+Для оператора
+$
+(\Delta\mathbf W_1^{(2)},\ldots,\Delta\mathbf W_E^{(2)})
+\mapsto
+\sum_{e=1}^{E}\Delta\mathbf W_e^{(2)}(g_e\mathbf r_e)
+$
+по неравенству Коши--Буняковского
 $$
-Поэтому
+\left\|
+\sum\limits_{e=1}^{E}
+\Delta\mathbf W_e^{(2)}(g_e\mathbf r_e)
+\right\|_2
+\le
+\left(
+\sum\limits_{e=1}^{E}
+\|\Delta\mathbf W_e^{(2)}\|_F^2
+\right)^{1/2}
+\left(
+\sum\limits_{e=1}^{E}
+g_e^2\|\mathbf r_e\|_2^2
+\right)^{1/2}.
+$$
+Неравенство достигается выбором приращений, направленных вдоль векторов $g_e\mathbf r_e$, поэтому
 $$
 \|\mathbf P^{(2)}(\mathbf w)\|_2
 =
 \left(
-\sum\limits_{e=1}^{E}g_e(\mathbf s)^2\|\mathbf r_e\|_2^2
+\sum\limits_{e=1}^{E}
+g_e^2\|\mathbf r_e\|_2^2
 \right)^{1/2}.
 $$
 Так как
-$$
+$
 \|\mathbf r_e\|_2
 \le
 \|\mathbf u_e\|_2
@@ -461,198 +514,300 @@ $$
 \|\mathbf W_e^{(1)}\|_2\|\mathbf x\|_2
 \le
 M_1M_{\mathbf x},
-$$
+$
 получаем
 $$
 \|\mathbf P^{(2)}(\mathbf w)\|_2
 \le
-\left(
-\sum\limits_{e=1}^{E}g_e(\mathbf s)^2(M_1M_{\mathbf x})^2
-\right)^{1/2}
-\le
-M_1M_{\mathbf x},
+M_1M_{\mathbf x}\sqrt{S_g}.
 $$
-поскольку $\sum_{e=1}^{E}g_e(\mathbf s)^2\le 1$.
 
 \textbf{Оценка $\mathbf S^{(2)}(\mathbf w)$.}
 Так как $\mathbf z=\mathbf z^{(2)}$, имеем
-$$
-\mathbf S^{(2)}(\mathbf w)=\mathbf I_d,
-\qquad
+$
+\mathbf S^{(2)}(\mathbf w)=\mathbf I_d$, и $
 \|\mathbf S^{(2)}(\mathbf w)\|_2=1.
-$$
+$
 
 \textbf{Оценка $\mathbf S^{(1)}(\mathbf w)$.}
-Рассмотрим произвольное возмущение
+Рассмотрим отображение $\mathbf z=F(\mathbf z^{(1)})$, где
 $$
-\Delta\mathbf z^{(1)}
+\mathbf z^{(1)}
 =
 \begin{bmatrix}
-\Delta\mathbf u_1\\
+\mathbf u_1\\
 \vdots\\
-\Delta\mathbf u_E\\
-\Delta\mathbf s
-\end{bmatrix},
-\qquad
-\Delta\mathbf z=\Delta\mathbf z_{\mathbf u}+\Delta\mathbf z_{\mathbf s}.
+\mathbf u_E\\
+\mathbf s
+\end{bmatrix}.
 $$
-
-Для первого слагаемого положим
+Будем оценивать действие его производной на произвольное направление
 $
-\mathbf D_e=\operatorname{diag}(\ReLU'(\mathbf u_e))
-$.
-Тогда почти всюду $\|\mathbf D_e\|_2\le 1$, и
+\Delta\mathbf z^{(1)}
+=
+\col(\Delta\mathbf u_1,\ldots,\Delta\mathbf u_E,\Delta\mathbf s).
+$
+Иными словами,
+$$
+\Delta\mathbf z
+=
+DF(\mathbf z^{(1)})[\Delta\mathbf z^{(1)}]
+=
+\lim_{\varepsilon\to0}
+\frac{
+F(\mathbf z^{(1)}+\varepsilon\Delta\mathbf z^{(1)})
+-
+F(\mathbf z^{(1)})
+}{\varepsilon}.
+$$
+Поскольку $DF(\mathbf z^{(1)})=\mathbf S^{(1)}(\mathbf w)$, из равномерной по всем направлениям оценки
+$
+\|\Delta\mathbf z\|_2\le C\|\Delta\mathbf z^{(1)}\|_2
+$
+следует
+$
+\|\mathbf S^{(1)}(\mathbf w)\|_2\le C.
+$
+
+Положим
+$
+\mathbf y_e=\mathbf W_e^{(2)}\mathbf r_e.
+$
+Тогда
+$$
+\mathbf z
+=
+\sum\limits_{e=1}^{E}g_e\mathbf y_e.
+$$
+Разложим линейный отклик на две части:
+$
+\Delta\mathbf z
+=
+\Delta\mathbf z_{\mathbf u}
++
+\Delta\mathbf z_{\mathbf s},
+$
+где $\Delta\mathbf z_{\mathbf u}$ соответствует изменению $\mathbf y_e$ при фиксированных $g_e$, а $\Delta\mathbf z_{\mathbf s}$ соответствует изменению коэффициентов $g_e$ при фиксированных $\mathbf y_e$.
+
+Работаем в точках дифференцируемости ReLU. Если некоторая координата $\mathbf u_e$ равна нулю, достаточно выбрать любое значение производной ReLU из $[0,1]$, поскольку ниже используется только оценка $\|\mathbf D_e\|_2\le 1$.
+
+Для первой части положим
+$
+\mathbf D_e=\operatorname{diag}(\ReLU'(\mathbf u_e)).
+$
+Тогда
+$
+\Delta\mathbf y_e
+=
+\mathbf W_e^{(2)}\mathbf D_e\Delta\mathbf u_e$,
+$\|\mathbf D_e\|_2\le 1,
+$
+и поэтому
 $$
 \Delta\mathbf z_{\mathbf u}
 =
 \sum\limits_{e=1}^{E}
-g_e(\mathbf s)\mathbf W_e^{(2)}\mathbf D_e\Delta\mathbf u_e.
+g_e\Delta\mathbf y_e
+=
+\sum\limits_{e=1}^{E}
+g_e\mathbf W_e^{(2)}\mathbf D_e\Delta\mathbf u_e.
 $$
+
 Следовательно,
 $$
 \begin{aligned}
 \|\Delta\mathbf z_{\mathbf u}\|_2
 &\le
+M_2
 \sum\limits_{e=1}^{E}
-g_e(\mathbf s)\|\mathbf W_e^{(2)}\|_2\|\mathbf D_e\|_2\|\Delta\mathbf u_e\|_2 \\
+g_e\|\Delta\mathbf u_e\|_2 \\
 &\le
-M_2\sum\limits_{e=1}^{E}g_e(\mathbf s)\|\Delta\mathbf u_e\|_2
-\le
-M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}.
+M_2
+\left(
+\sum\limits_{e=1}^{E}g_e^2
+\right)^{1/2}
+\left(
+\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2
+\right)^{1/2} 
+=
+M_2\sqrt{S_g}
+\left(
+\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2
+\right)^{1/2}.
 \end{aligned}
 $$
 
-Для второго слагаемого обозначим
+Для второй части используем формулу производной softmax. Обозначим
 $
-\mathbf y_e=\mathbf W_e^{(2)}\mathbf r_e
-$.
-Тогда
-$$
-\|\mathbf y_e\|_2
-\le
-\|\mathbf W_e^{(2)}\|_2\|\mathbf r_e\|_2
-\le
-M_1M_2M_{\mathbf x}.
-$$
-Кроме того,
-$$
-\Delta g_e
+\overline{\Delta s}
 =
-g_e(\mathbf s)
-\left(
-\Delta s_e-\sum\limits_{j=1}^{E}g_j(\mathbf s)\Delta s_j
-\right).
-$$
-Обозначим
+\sum\limits_{j=1}^{E}g_j\Delta s_j.
 $
-\overline{\Delta s}=\sum_{j=1}^{E}g_j(\mathbf s)\Delta s_j
-$.
-Тогда
+Тогда изменение коэффициентов гейтинга даёт
 $$
 \Delta\mathbf z_{\mathbf s}
 =
 \sum\limits_{e=1}^{E}
-g_e(\mathbf s)\bigl(\Delta s_e-\overline{\Delta s}\bigr)\mathbf y_e,
+g_e(\Delta s_e-\overline{\Delta s})\mathbf y_e.
 $$
-и потому
+Так как
+$
+\|\mathbf y_e\|_2
+\le
+\|\mathbf W_e^{(2)}\|_2\|\mathbf r_e\|_2
+\le
+M_1M_2M_{\mathbf x},
+$
+получаем
 $$
 \begin{aligned}
 \|\Delta\mathbf z_{\mathbf s}\|_2
 &\le
-\sum\limits_{e=1}^{E}
-g_e(\mathbf s)|\Delta s_e-\overline{\Delta s}|\|\mathbf y_e\|_2 \\
-&\le
 M_1M_2M_{\mathbf x}
-\sum\limits_{e=1}^{E}g_e(\mathbf s)|\Delta s_e-\overline{\Delta s}| \\
+\sum\limits_{e=1}^{E}
+g_e|\Delta s_e-\overline{\Delta s}| \\
 &\le
 M_1M_2M_{\mathbf x}
 \left(
-\sum\limits_{e=1}^{E}g_e(\mathbf s)(\Delta s_e-\overline{\Delta s})^2
+\sum\limits_{e=1}^{E}g_e|\Delta s_e|
++
+|\overline{\Delta s}|
+\right) \leq
+2M_1M_2M_{\mathbf x}
+\sum\limits_{e=1}^{E}g_e|\Delta s_e| \\
+&\le
+2M_1M_2M_{\mathbf x}
+\left(
+\sum\limits_{e=1}^{E}g_e^2
 \right)^{1/2}
-\le
-M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2.
+\left(
+\sum\limits_{e=1}^{E}|\Delta s_e|^2
+\right)^{1/2}
+=
+2M_1M_2M_{\mathbf x}\sqrt{S_g}\|\Delta\mathbf s\|_2.
 \end{aligned}
 $$
-
-Итак,
-$$
+Обозначив
+$
+a=\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}
+$
+и
+$
+b=\|\Delta\mathbf s\|_2,
+$
+получаем
+$
 \|\Delta\mathbf z\|_2
 \le
-M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}
+M_2\sqrt{S_g}\,a
 +
-M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2.
-$$
-По неравенству Коши--Буняковского отсюда следует
+2M_1M_2M_{\mathbf x}\sqrt{S_g}\,b.
+$
+По неравенству Коши--Буняковского
+$
+a+2M_1M_{\mathbf x}b
+\le
+\sqrt{1+4M_1^2M_{\mathbf x}^2}
+\sqrt{a^2+b^2}.
+$
+Следовательно,
 $$
 \|\Delta\mathbf z\|_2
 \le
-M_2\sqrt{1+M_1^2M_{\mathbf x}^2}
-\left(
-\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2+\|\Delta\mathbf s\|_2^2
-\right)^{1/2},
+M_2\sqrt{S_g}
+\sqrt{1+4M_1^2M_{\mathbf x}^2}
+\|\Delta\mathbf z^{(1)}\|_2.
 $$
-то есть
+Значит,
 $$
 \|\mathbf S^{(1)}(\mathbf w)\|_2
 \le
-M_2\sqrt{1+M_1^2M_{\mathbf x}^2}.
+M_2\sqrt{S_g}
+\sqrt{1+4M_1^2M_{\mathbf x}^2}.
 $$
 
-\textbf{Завершение доказательства.}
 Полученные оценки дают
 $$
 \|\mathbf J^{(1)}(\mathbf w)\|_2
 \le
-M_2M_{\mathbf x}\sqrt{1+M_1^2M_{\mathbf x}^2},
+M_2M_{\mathbf x}\sqrt{S_g}
+\sqrt{1+4M_1^2M_{\mathbf x}^2},
 \qquad
 \|\mathbf J^{(2)}(\mathbf w)\|_2
 \le
-M_1M_{\mathbf x}.
+M_1M_{\mathbf x}\sqrt{S_g}.
 $$
-Следовательно,
+Поэтому
 $$
 \begin{aligned}
 \|\mathbf J(\mathbf w)\|_2^2
-&=
-\|\mathbf J(\mathbf w)\mathbf J(\mathbf w)^\top\|_2 \\
 &\le
-\|\mathbf J^{(1)}(\mathbf w)\|_2^2+\|\mathbf J^{(2)}(\mathbf w)\|_2^2 \\
+\|\mathbf J^{(1)}(\mathbf w)\|_2^2
++
+\|\mathbf J^{(2)}(\mathbf w)\|_2^2 \\
 &\le
-M_2^2M_{\mathbf x}^2(1+M_1^2M_{\mathbf x}^2)+M_1^2M_{\mathbf x}^2 \\
+M_2^2M_{\mathbf x}^2S_g
+\left(1+4M_1^2M_{\mathbf x}^2\right)
++
+M_1^2M_{\mathbf x}^2S_g \\
 &=
-M_{\mathbf x}^2\left(M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2\right).
+M_{\mathbf x}^2S_g
+\left(
+M_1^2+M_2^2+4M_1^2M_2^2M_{\mathbf x}^2
+\right).
 \end{aligned}
 $$
 Так как
 $
 \|\mathbf G(\mathbf w)\|_2
 \le
-\|\mathbf A(\mathbf w)\|_2\,\|\mathbf J(\mathbf w)\|_2^2
-$,
-из~\eqref{eq:moe-softmax-assumptions} получаем~\eqref{eq:moe-softmax-G-bound}.
+\|\mathbf A(\mathbf w)\|_2\|\mathbf J(\mathbf w)\|_2^2,
+$
+из~\eqref{eq:moe-softmax-assumptions} следует~\eqref{eq:moe-softmax-G-bound}.
 \end{proof}
 
 \begin{remark}
-Если оценивать матрицу распространения первого слоя грубо через норму конкатенированного выходного оператора, то
+\label{rem:moe-softmax-simple-bound}
+Если в оценке слагаемого, отвечающего за возмущение softmax-коэффициентов, не сохранять зависимость от $S_g(\mathbf x)$, то можно получить более грубую оценку
 $$
-\left\|
-\begin{bmatrix}
-\mathbf W_1^{(2)} & \cdots & \mathbf W_E^{(2)}
-\end{bmatrix}
-\right\|_2
+    \|\mathbf G(\mathbf w)\|_2
+    \le
+    M_{\mathbf A}M_{\mathbf x}^2
+    \left(
+        M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+    \right).
+$$
+Действительно, по неравенству Коши--Буняковского с весами $g_e$,
+$$
+\sum_{e=1}^{E}g_e|\Delta s_e-\overline{\Delta s}|
 \le
-\sqrt{E}\,M_2,
-$$
-и потому
-$$
-\|\mathbf G(\mathbf w)\|_2
-\le
-M_{\mathbf A}M_{\mathbf x}^2
+\sqrt{
+\left(\sum\limits_{e=1}^{E}g_e\right)
 \left(
-M_1^2+EM_2^2+EM_1^2M_2^2M_{\mathbf x}^2
-\right).
+\sum\limits_{e=1}^{E}
+g_e(\Delta s_e-\overline{\Delta s})^2
+\right)
+} \leq \|\Delta\mathbf s\|_2
 $$
-Таким образом, аккуратный анализ softmax-структуры устраняет множитель $E$ из улучшенной оценки, тогда как прямое огрубление через норму конкатенированного оператора его сохраняет.
+Вторая сумма является взвешенной дисперсией координат $\Delta s_e$ относительно среднего
+$
+\overline{\Delta s}=\sum\limits_{e=1}^{E}g_e\Delta s_e
+$,
+откуда и
+$$
+\sum\limits_{e=1}^{E}
+g_e(\Delta s_e-\overline{\Delta s})^2
+=
+\sum\limits_{e=1}^{E}g_e(\Delta s_e)^2
+-
+(\overline{\Delta s})^2
+\le
+\sum\limits_{e=1}^{E}g_e(\Delta s_e)^2
+\le
+\|\Delta\mathbf s\|_2^2.
+$$
+
+Эта оценка не отражает влияние концентрации гейтинга через $S_g(\mathbf x)$, но полезна как базовая граница, не зависящая от распределения коэффициентов softmax.
 \end{remark}
 
 \subsection{Следствия для разреженных вариантов softmax-гейтинга}
@@ -676,7 +831,9 @@ $,
         0, & e\notin\mathcal T(\mathbf x).
     \end{cases}
 \end{equation}
-Предположим, что выполнены условия~\eqref{eq:moe-softmax-assumptions}. Пусть, кроме того, в рассматриваемой точке выполнено условие строгого разделения
+Предположим, что выполнены условия~\eqref{eq:moe-softmax-assumptions}, и обозначим
+$\tilde S_g(\mathbf x)
+=\sum\limits_{e\in\mathcal T(\mathbf x)}\tilde g_e(\mathbf x)^2.$ Пусть, кроме того, в рассматриваемой точке выполнено условие строгого разделения
 \begin{equation}
     \label{eq:topk-gap-condition}
     s_{(K)}(\mathbf x)>s_{(K+1)}(\mathbf x),
@@ -686,51 +843,194 @@ $,
     \label{eq:moe-topk-G-bound}
     \|\mathbf G(\mathbf w)\|_2
     \le
-    M_{\mathbf A}M_{\mathbf x}^2
+    M_{\mathbf A}M_{\mathbf x}^2\tilde S_g(\mathbf x)
     \left(
-        M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+        M_1^2+M_2^2+4M_1^2M_2^2M_{\mathbf x}^2
     \right).
 \end{equation}
 \end{corollary}
 
 \begin{proof}
-Условие~\eqref{eq:topk-gap-condition} обеспечивает локальную постоянность активного множества. Зафиксируем его и обозначим через $\mathcal T$.
+Для краткости пишем
+$
+    \tilde g_e=\tilde g_e(\mathbf x),
+    \quad
+    \tilde S_g=\tilde S_g(\mathbf x).
+$
+Условие~\eqref{eq:topk-gap-condition} обеспечивает локальную постоянность активного множества. Зафиксируем это множество и обозначим его через $\mathcal T$.
 
-На этой окрестности модель совпадает с гладкой MoE-архитектурой, где softmax вычисляется только по индексам из $\mathcal T$. Поэтому доказательство повторяет доказательство теоремы~\ref{thm:moe-softmax-G-bound} после замены сумм по $e=1,\dots,E$ на суммы по $e\in\mathcal T$ и коэффициентов $g_e$ на $\tilde g_e$.
+На рассматриваемой окрестности модель имеет вид
+$$
+\mathbf z
+=
+\sum\limits_{e\in\mathcal T}
+\tilde g_e
+\mathbf W_e^{(2)}
+\ReLU\!\left(\mathbf W_e^{(1)}\mathbf x\right),
+$$
+причём softmax вычисляется только по индексам из $\mathcal T$. Поэтому оценки из доказательства теоремы~\ref{thm:moe-softmax-G-bound-improved} повторяются после замены сумм по $e=1,\dots,E$ на суммы по $e\in\mathcal T$ и коэффициентов $g_e$ на $\tilde g_e$.
 
-При этом оценка для $\mathbf P^{(1)}(\mathbf w)$ не меняется, а для $\mathbf P^{(2)}(\mathbf w)$ имеем
+Оценка для $\mathbf P^{(1)}(\mathbf w)$ не меняется:
+$$
+\|\mathbf P^{(1)}(\mathbf w)\|_2\le M_{\mathbf x}.
+$$
+Для второго параметрического якобиана имеем
 $$
 \|\mathbf P^{(2)}(\mathbf w)\|_2
 =
 \left(
-\sum\limits_{e\in\mathcal T}\tilde g_e(\mathbf s)^2\|\mathbf r_e\|_2^2
+\sum\limits_{e\in\mathcal T}
+\tilde g_e^2\|\mathbf r_e\|_2^2
 \right)^{1/2}
 \le
-M_1M_{\mathbf x},
+M_1M_{\mathbf x}\sqrt{\tilde S_g}.
 $$
-поскольку $\sum_{e\in\mathcal T}\tilde g_e(\mathbf s)^2\le 1$.
+Также $\|\mathbf S^{(2)}(\mathbf w)\|_2=1$.
 
-Аналогично,
+Осталось оценить $\mathbf S^{(1)}(\mathbf w)$. Как и в доказательстве теоремы~\ref{thm:moe-softmax-G-bound-improved}, рассмотрим направление
+$
+\Delta\mathbf z^{(1)}
+=
+\col(\Delta\mathbf u_1,\ldots,\Delta\mathbf u_E,\Delta\mathbf s)
+$
+и разложим линейный отклик:
+$
+\Delta\mathbf z=\Delta\mathbf z_{\mathbf u}+\Delta\mathbf z_{\mathbf s}.
+$
+Для первой части получаем
 $$
+\Delta\mathbf z_{\mathbf u}
+=
+\sum\limits_{e\in\mathcal T}
+\tilde g_e
+\mathbf W_e^{(2)}
+\mathbf D_e
+\Delta\mathbf u_e,
+\qquad
+\|\mathbf D_e\|_2\le 1,
+$$
+откуда
+$$
+\begin{aligned}
 \|\Delta\mathbf z_{\mathbf u}\|_2
+&\le
+M_2
+\sum\limits_{e\in\mathcal T}
+\tilde g_e\|\Delta\mathbf u_e\|_2
 \le
-M_2\left(\sum\limits_{e\in\mathcal T}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}
+M_2
+\left(
+\sum\limits_{e\in\mathcal T}\tilde g_e^2
+\right)^{1/2}
+\left(
+\sum\limits_{e\in\mathcal T}
+\|\Delta\mathbf u_e\|_2^2
+\right)^{1/2}
 \le
-M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2},
+M_2\sqrt{\tilde S_g}
+\left(
+\sum\limits_{e=1}^{E}
+\|\Delta\mathbf u_e\|_2^2
+\right)^{1/2}.
+\end{aligned}
 $$
-а для возмущения коэффициентов гейтинга сохраняется оценка
-$$
-\|\Delta\mathbf z_{\mathbf s}\|_2
-\le
-M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2.
-$$
+
+Для второй части положим
+$
+\mathbf y_e=\mathbf W_e^{(2)}\mathbf r_e
+$,
+тогда
+$
+\|\mathbf y_e\|_2\le M_1M_2M_{\mathbf x}.
+$
+Поскольку softmax вычисляется на множестве $\mathcal T$, обозначим
+$
+\overline{\Delta s}_{\mathcal T}
+=
+\sum\limits_{j\in\mathcal T}\tilde g_j\Delta s_j.
+$
+Тогда
+$
+\Delta\mathbf z_{\mathbf s}
+=
+\sum\limits_{e\in\mathcal T}
+\tilde g_e
+\left(
+\Delta s_e-\overline{\Delta s}_{\mathcal T}
+\right)
+\mathbf y_e.
+$
 Следовательно,
+$$
+\begin{aligned}
+\|\Delta\mathbf z_{\mathbf s}\|_2
+&\le
+M_1M_2M_{\mathbf x}
+\sum\limits_{e\in\mathcal T}
+\tilde g_e
+\left|
+\Delta s_e-\overline{\Delta s}_{\mathcal T}
+\right| \\
+&\le
+M_1M_2M_{\mathbf x}
+\left(
+\sum\limits_{e\in\mathcal T}
+\tilde g_e|\Delta s_e|
++
+|\overline{\Delta s}_{\mathcal T}|
+\right) \\
+&\le
+2M_1M_2M_{\mathbf x}
+\sum\limits_{e\in\mathcal T}
+\tilde g_e|\Delta s_e| \\
+&\le
+2M_1M_2M_{\mathbf x}
+\left(
+\sum\limits_{e\in\mathcal T}\tilde g_e^2
+\right)^{1/2}
+\left(
+\sum\limits_{e\in\mathcal T}|\Delta s_e|^2
+\right)^{1/2} \\
+&\le
+2M_1M_2M_{\mathbf x}
+\sqrt{\tilde S_g}\|\Delta\mathbf s\|_2.
+\end{aligned}
+$$
+
+Тем самым
 $$
 \|\mathbf S^{(1)}(\mathbf w)\|_2
 \le
-M_2\sqrt{1+M_1^2M_{\mathbf x}^2}.
+M_2\sqrt{\tilde S_g}
+\sqrt{1+4M_1^2M_{\mathbf x}^2}.
 $$
-Тем самым оценки для $\|\mathbf J^{(1)}(\mathbf w)\|_2$, $\|\mathbf J^{(2)}(\mathbf w)\|_2$ и $\|\mathbf J(\mathbf w)\|_2^2$ совпадают с оценками из доказательства теоремы~\ref{thm:moe-softmax-G-bound}, откуда и следует~\eqref{eq:moe-topk-G-bound}.
+Следовательно,
+$$
+\|\mathbf J^{(1)}(\mathbf w)\|_2
+\le
+M_2M_{\mathbf x}\sqrt{\tilde S_g}
+\sqrt{1+4M_1^2M_{\mathbf x}^2},
+\qquad
+\|\mathbf J^{(2)}(\mathbf w)\|_2
+\le
+M_1M_{\mathbf x}\sqrt{\tilde S_g}.
+$$
+Значит,
+$$
+\|\mathbf J(\mathbf w)\|_2^2
+\le
+M_{\mathbf x}^2\tilde S_g
+\left(
+M_1^2+M_2^2+4M_1^2M_2^2M_{\mathbf x}^2
+\right).
+$$
+Используя
+$
+\|\mathbf G(\mathbf w)\|_2
+\le
+\|\mathbf A(\mathbf w)\|_2\|\mathbf J(\mathbf w)\|_2^2
+$
+и условие~\eqref{eq:moe-softmax-assumptions}, получаем~\eqref{eq:moe-topk-G-bound}.
 \end{proof}
 
 \begin{remark}
@@ -749,29 +1049,6 @@ $$
 «полный softmax, затем top-$K$ и перенормировка».
 \end{remark}
 
-\begin{remark}
-Если в случае top-$K$-гейтинга оценивать матрицу распространения первого слоя грубо через норму конкатенированного выходного оператора по активным экспертам, то
-$$
-\left\|
-\begin{bmatrix}
-\mathbf W_e^{(2)}
-\end{bmatrix}_{e\in\mathcal T}
-\right\|_2
-\le
-\sqrt{K}\,M_2.
-$$
-Тогда получаем более слабую, но явную по числу активных экспертов оценку
-$$
-\|\mathbf G(\mathbf w)\|_2
-\le
-M_{\mathbf A}M_{\mathbf x}^2
-\left(
-M_1^2+KM_2^2+KM_1^2M_2^2M_{\mathbf x}^2
-\right).
-$$
-Таким образом, аккуратный анализ softmax-структуры на фиксированном активном множестве устраняет явную зависимость от $K$ из улучшенной оценки, тогда как прямое огрубление через норму конкатенированного оператора ее сохраняет.
-\end{remark}
-
 \begin{corollary}
 \label{cor:moe-postsoftmax-topk-no-renorm}
 Пусть $f_{\mathbf w}$ является одним слоем смеси экспертов вида~\eqref{eq:moe-model-softmax}, в котором сначала вычисляются softmax-коэффициенты~\eqref{eq:moe-softmax-gating}, а затем применяется top-$K$-отбор без дополнительной перенормировки:
@@ -783,173 +1060,353 @@ $$
         0, & e\notin\mathcal T(\mathbf x).
     \end{cases}
 \end{equation}
-Здесь $\mathcal T(\mathbf x)$ есть множество $K$ индексов, соответствующих наибольшим значениям логитов $s_e(\mathbf x)=\mathbf a_e^\top\mathbf x$. Предположим, что выполнены условия~\eqref{eq:moe-softmax-assumptions}. Пусть, кроме того, выполнено условие строгого разделения~\eqref{eq:topk-gap-condition}. Тогда в некоторой окрестности рассматриваемого параметра $\mathbf w$ активное множество $\mathcal T(\mathbf x)$ постоянно, и для гаусс"--~ньютоновской компоненты выполняется оценка
+Здесь $\mathcal T(\mathbf x)$ есть множество $K$ индексов, соответствующих наибольшим значениям логитов $s_e(\mathbf x)=\mathbf a_e^\top\mathbf x$. Предположим, что выполнены условия~\eqref{eq:moe-softmax-assumptions}, и обозначим
+$
+\hat S_g(\mathbf x)
+=
+\sum\limits_{e\in\mathcal T(\mathbf x)}
+g_e(\mathbf x)^2.
+$
+Пусть, кроме того, выполнено условие строгого разделения~\eqref{eq:topk-gap-condition}. Тогда в некоторой окрестности рассматриваемого параметра $\mathbf w$ активное множество $\mathcal T(\mathbf x)$ постоянно, и для гаусс"--~ньютоновской компоненты выполняется оценка
 \begin{equation}
     \label{eq:moe-postsoftmax-topk-no-renorm-bound}
     \|\mathbf G(\mathbf w)\|_2
     \le
-    M_{\mathbf A}M_{\mathbf x}^2
+    M_{\mathbf A}M_{\mathbf x}^2\hat S_g(\mathbf x)
     \left(
-        M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+        M_1^2+M_2^2+4M_1^2M_2^2M_{\mathbf x}^2
     \right).
 \end{equation}
 \end{corollary}
 
 \begin{proof}
-Условие~\eqref{eq:topk-gap-condition} обеспечивает локальную постоянность активного множества. Зафиксируем его и обозначим через $\mathcal T$.
+Для краткости пишем
+$
+    g_e=g_e(\mathbf s)=g_e(\mathbf x),
+    \quad
+    \hat S_g=\hat S_g(\mathbf x).
+$
+Условие~\eqref{eq:topk-gap-condition} обеспечивает локальную постоянность активного множества. Зафиксируем это множество и обозначим его через $\mathcal T$.
 
-На этой окрестности выход модели имеет вид
+На рассматриваемой окрестности модель имеет вид
 $$
 \mathbf z
 =
-\sum\limits_{e=1}^{E}\hat g_e(\mathbf x)\mathbf W_e^{(2)}\ReLU\!\left(\mathbf W_e^{(1)}\mathbf x\right)
-=
-\sum\limits_{e\in\mathcal T}g_e(\mathbf x)\mathbf W_e^{(2)}\ReLU\!\left(\mathbf W_e^{(1)}\mathbf x\right).
+\sum\limits_{e\in\mathcal T}
+g_e
+\mathbf W_e^{(2)}
+\ReLU\!\left(\mathbf W_e^{(1)}\mathbf x\right).
 $$
+В отличие от следствия~\ref{cor:moe-topk-G-bound}, коэффициенты $g_e$ здесь остаются коэффициентами полного softmax по всем $E$ экспертам.
 
-Оценка для $\mathbf P^{(1)}(\mathbf w)$ остается прежней:
+Оценка для $\mathbf P^{(1)}(\mathbf w)$ не меняется:
 $$
 \|\mathbf P^{(1)}(\mathbf w)\|_2\le M_{\mathbf x}.
 $$
-Для $\mathbf P^{(2)}(\mathbf w)$ имеем
+Для второго параметрического якобиана имеем
 $$
 \|\mathbf P^{(2)}(\mathbf w)\|_2
 =
 \left(
-\sum\limits_{e\in\mathcal T}g_e(\mathbf s)^2\|\mathbf r_e\|_2^2
+\sum\limits_{e\in\mathcal T}
+g_e^2\|\mathbf r_e\|_2^2
 \right)^{1/2}
 \le
-M_1M_{\mathbf x},
+M_1M_{\mathbf x}\sqrt{\hat S_g}.
 $$
-поскольку
-$
-\sum_{e\in\mathcal T}g_e(\mathbf s)^2\le \sum_{e=1}^{E}g_e(\mathbf s)^2\le 1
-$.
-Кроме того,
-$$
-\|\mathbf S^{(2)}(\mathbf w)\|_2=1.
-$$
+Также $\|\mathbf S^{(2)}(\mathbf w)\|_2=1$.
 
-Для оценки $\mathbf S^{(1)}(\mathbf w)$ рассмотрим возмущение
-$$
+Оценим $\mathbf S^{(1)}(\mathbf w)$. Как и выше, рассмотрим направление
+$
 \Delta\mathbf z^{(1)}
 =
-\begin{bmatrix}
-\Delta\mathbf u_1\\
-\vdots\\
-\Delta\mathbf u_E\\
-\Delta\mathbf s
-\end{bmatrix},
-\qquad
+\col(\Delta\mathbf u_1,\ldots,\Delta\mathbf u_E,\Delta\mathbf s)
+$
+и разложим линейный отклик:
+$
 \Delta\mathbf z=\Delta\mathbf z_{\mathbf u}+\Delta\mathbf z_{\mathbf s}.
-$$
-Тогда
+$
+
+Для первой части получаем
 $$
 \Delta\mathbf z_{\mathbf u}
 =
 \sum\limits_{e\in\mathcal T}
-g_e(\mathbf s)\mathbf W_e^{(2)}\mathbf D_e\Delta\mathbf u_e,
+g_e\mathbf W_e^{(2)}\mathbf D_e\Delta\mathbf u_e,
 \qquad
-\mathbf D_e=\operatorname{diag}(\ReLU'(\mathbf u_e)),
-\qquad
-\|\mathbf D_e\|_2\le 1,
+\|\mathbf D_e\|_2\le 1.
 $$
-и потому
+Следовательно,
 $$
+\begin{aligned}
 \|\Delta\mathbf z_{\mathbf u}\|_2
-\le
-M_2\left(\sum\limits_{e\in\mathcal T}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}
-\le
-M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}.
+&\le
+M_2
+\sum\limits_{e\in\mathcal T}
+g_e\|\Delta\mathbf u_e\|_2 \\
+&\le
+M_2
+\left(
+\sum\limits_{e\in\mathcal T}g_e^2
+\right)^{1/2}
+\left(
+\sum\limits_{e\in\mathcal T}
+\|\Delta\mathbf u_e\|_2^2
+\right)^{1/2} \\
+&\le
+M_2\sqrt{\hat S_g}
+\left(
+\sum\limits_{e=1}^{E}
+\|\Delta\mathbf u_e\|_2^2
+\right)^{1/2}.
+\end{aligned}
 $$
 
-Далее, если обозначить $\mathbf y_e=\mathbf W_e^{(2)}\mathbf r_e$, то
+Для второй части положим
 $
-\|\mathbf y_e\|_2\le M_1M_2M_{\mathbf x}
-$,
-а из~\eqref{eq:moe-postsoftmax-topk-no-renorm} следует, что для $e\in\mathcal T$
-$$
-\Delta \hat g_e
-=
-\Delta g_e
-=
-g_e(\mathbf s)
-\left(
-\Delta s_e-\sum\limits_{j=1}^{E}g_j(\mathbf s)\Delta s_j
-\right).
-$$
-Обозначив
+\mathbf y_e=\mathbf W_e^{(2)}\mathbf r_e.
 $
-\overline{\Delta s}=\sum_{j=1}^{E}g_j(\mathbf s)\Delta s_j
-$,
-получаем
+Тогда
+$
+\|\mathbf y_e\|_2\le M_1M_2M_{\mathbf x}.
+$
+Поскольку $g_e$ являются коэффициентами полного softmax, обозначим
+$
+\overline{\Delta s}
+=
+\sum\limits_{j=1}^{E}g_j\Delta s_j.
+$
+Тогда
 $$
 \Delta\mathbf z_{\mathbf s}
 =
 \sum\limits_{e\in\mathcal T}
-g_e(\mathbf s)\bigl(\Delta s_e-\overline{\Delta s}\bigr)\mathbf y_e,
-$$
-откуда
-$$
-\begin{aligned}
-\|\Delta\mathbf z_{\mathbf s}\|_2
-&\le
-\sum\limits_{e\in\mathcal T}g_e(\mathbf s)|\Delta s_e-\overline{\Delta s}|\|\mathbf y_e\|_2 \\
-&\le
-M_1M_2M_{\mathbf x}
-\sum\limits_{e\in\mathcal T}g_e(\mathbf s)|\Delta s_e-\overline{\Delta s}| \\
-&\le
-M_1M_2M_{\mathbf x}
+g_e
 \left(
-\sum\limits_{e=1}^{E}g_e(\mathbf s)(\Delta s_e-\overline{\Delta s})^2
-\right)^{1/2}
+\Delta s_e-\overline{\Delta s}
+\right)
+\mathbf y_e.
+$$
+Значит,
+$$
+\|\Delta\mathbf z_{\mathbf s}\|_2
 \le
-M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2.
-\end{aligned}
+M_1M_2M_{\mathbf x}
+\sum\limits_{e\in\mathcal T}
+g_e
+\left|
+\Delta s_e-\overline{\Delta s}
+\right|.
 $$
 
-Следовательно,
+Обозначим
+$
+\tau=\sum\limits_{e\in\mathcal T}g_e
+$
+и
+$
+S_g=\sum\limits_{e=1}^{E}g_e^2.
+$
+Так как $\mathcal T$ состоит из индексов с наибольшими коэффициентами softmax, выполнено
+$
+\tau^2S_g\le \hat S_g.
+$
+Действительно, для $j\notin\mathcal T$ имеем
+$
+g_j\le \hat S_g/\tau
+$,
+поэтому
+$
+S_g\le \hat S_g/\tau
+$
+и, следовательно,
+$
+\tau^2S_g\le \tau\hat S_g\le \hat S_g.
+$
+
+Теперь
 $$
-\|\Delta\mathbf z\|_2
-\le
-M_2\left(\sum\limits_{e=1}^{E}\|\Delta\mathbf u_e\|_2^2\right)^{1/2}
+\begin{aligned}
+\sum\limits_{e\in\mathcal T}
+g_e
+\left|
+\Delta s_e-\overline{\Delta s}
+\right|
+&\le
+\sum\limits_{e\in\mathcal T}
+g_e|\Delta s_e|
 +
-M_1M_2M_{\mathbf x}\|\Delta\mathbf s\|_2,
+\tau|\overline{\Delta s}| \\
+&\le
+\sqrt{\hat S_g}\|\Delta\mathbf s\|_2
++
+\tau\sqrt{S_g}\|\Delta\mathbf s\|_2 \\
+&\le
+2\sqrt{\hat S_g}\|\Delta\mathbf s\|_2.
+\end{aligned}
 $$
-а значит,
+Отсюда
+$$
+\|\Delta\mathbf z_{\mathbf s}\|_2
+\le
+2M_1M_2M_{\mathbf x}
+\sqrt{\hat S_g}\|\Delta\mathbf s\|_2.
+$$
+
+Повторяя финальный шаг из доказательства теоремы~\ref{thm:moe-softmax-G-bound-improved}, получаем
 $$
 \|\mathbf S^{(1)}(\mathbf w)\|_2
 \le
-M_2\sqrt{1+M_1^2M_{\mathbf x}^2}.
+M_2\sqrt{\hat S_g}
+\sqrt{1+4M_1^2M_{\mathbf x}^2}.
 $$
-
-Тем самым
+Следовательно,
 $$
 \|\mathbf J^{(1)}(\mathbf w)\|_2
 \le
-M_2M_{\mathbf x}\sqrt{1+M_1^2M_{\mathbf x}^2},
+M_2M_{\mathbf x}\sqrt{\hat S_g}
+\sqrt{1+4M_1^2M_{\mathbf x}^2},
 \qquad
 \|\mathbf J^{(2)}(\mathbf w)\|_2
 \le
-M_1M_{\mathbf x},
+M_1M_{\mathbf x}\sqrt{\hat S_g}.
 $$
-и потому
+Значит,
 $$
 \|\mathbf J(\mathbf w)\|_2^2
 \le
-M_{\mathbf x}^2
+M_{\mathbf x}^2\hat S_g
 \left(
-M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+M_1^2+M_2^2+4M_1^2M_2^2M_{\mathbf x}^2
 \right).
 $$
-Используя неравенство
+Используя
 $
 \|\mathbf G(\mathbf w)\|_2
 \le
-\|\mathbf A(\mathbf w)\|_2\,\|\mathbf J(\mathbf w)\|_2^2
-$,
-получаем~\eqref{eq:moe-postsoftmax-topk-no-renorm-bound}.
+\|\mathbf A(\mathbf w)\|_2\|\mathbf J(\mathbf w)\|_2^2
+$
+и условие~\eqref{eq:moe-softmax-assumptions}, получаем~\eqref{eq:moe-postsoftmax-topk-no-renorm-bound}.
 \end{proof}
+
+\section{Вычислительный эксперимент}
+
+\subsection{Схема <<учитель--ученик>> на синтетических данных}
+
+Для эмпирической проверки использовалась стандартная схема <<учитель--ученик>>.
+Генерировался \textbf{учитель}~--- слой MoE с фиксированными параметрами
+($E_{\text{teacher}}=16$, $d=16$, $d_{\text{ff}}=32$, $K=E$,
+softmax-гейтинг).
+Входные векторы $\mathbf{x}\in\mathbb{R}^d$ выбирались на единичной сфере;
+выходы учителя $\mathbf{z}_{\text{teacher}}$ вычислялись без шума.
+Формировались обучающая (2048 объектов) и тестовая (512 объектов) выборки.
+
+Затем для каждого числа экспертов $E\in\{2,4,8,16,32,64,128\}$ создавался
+\textbf{ученик}~--- слой MoE той же архитектуры, но с $E$ экспертами,
+и обучался предсказывать выходы учителя с функцией потерь
+$\frac12\|\mathbf{z}_{\text{ученика}} - \mathbf{z}_{\text{учителя}}\|_2^2$,
+для которой $M_{\mathbf{A}}=1$.
+Обучение велось 20 эпох оптимизатором Adam с learning rate $10^{-3}$;
+все эксперты были активны ($K=E$).
+
+После обучения для каждого значения $E$ выбиралась фиксированная подвыборка из $m=16$ тестовых объектов. На этой подвыборке вычислялись:
+\begin{itemize}
+    \item спектральная норма $\|\mathbf G\|_2$ гаусс"--~ньютоновской компоненты с помощью степенного метода;
+    \item значение оценки без множителя $S_g$;
+    \item значение оценки из теоремы~\ref{thm:moe-softmax-G-bound-improved}.
+\end{itemize}
+Среднее значение $S_g=\sum\limits_{e=1}^{E}g_e^2$ дополнительно вычислялось по всей тестовой выборке.
+
+Для краткости обозначим через $B_0$ оценку без множителя $S_g$, а через $B_{S_g}$ --- оценку из теоремы~\ref{thm:moe-softmax-G-bound-improved}:
+$$
+\begin{aligned}
+B_0
+&=
+M_{\mathbf A}M_{\mathbf x}^2
+\left(
+M_1^2+M_2^2+M_1^2M_2^2M_{\mathbf x}^2
+\right), \\
+B_{S_g}
+&=
+M_{\mathbf A}M_{\mathbf x}^2S_g
+\left(
+M_1^2+M_2^2+4M_1^2M_2^2M_{\mathbf x}^2
+\right).
+\end{aligned}
+$$
+
+\subsection{Результаты}
+
+На рис.~\ref{fig:experiment_bounds} приведено сравнение эмпирической нормы $\|\mathbf G\|_2$ с двумя теоретическими границами. Левая панель показывает сами величины в логарифмическом масштабе, а правая --- отношение эмпирической нормы к каждой из границ.
+
+\begin{figure}[!htbp]
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figs/bound_comparison_article.pdf}
+        \caption{Нормы и верхние границы}
+        \label{fig:bound_comparison}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figs/bound_ratios_article.pdf}
+        \caption{Отношения к границам}
+        \label{fig:bound_ratios}
+    \end{subfigure}
+    \caption{
+    Сравнение эмпирической нормы $\|\mathbf G\|_2$ с оценками $B_0$ и $B_{S_g}$.
+    }
+    \label{fig:experiment_bounds}
+\end{figure}
+
+Из рис.~\ref{fig:experiment_bounds} видно, что оценка $B_0$ без множителя $S_g$ практически не отражает зависимость от числа экспертов: при увеличении $E$ эмпирическая норма $\|\mathbf G\|_2$ убывает, тогда как эта граница остаётся существенно более грубой. Напротив, оценка $B_{S_g}$ убывает вместе с эмпирической нормой и лучше передаёт зависимость от числа экспертов. Более того, отношение $\|\mathbf G\|_2/B_{S_g}$ выходит на почти постоянный уровень при больших $E$. Это указывает на то, что множитель $S_g$ действительно выделяет основную зависимость гаусс"--~ньютоновской компоненты от числа экспертов.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.55\textwidth]{figs/Sg_vs_E_article.pdf}
+    \caption{
+        Среднее значение $S_g$ при различном числе экспертов $E$
+    }
+    \label{fig:Sg_vs_E}
+\end{figure}
+
+Дополнительно на рис.~\ref{fig:Sg_vs_E} показана зависимость среднего значения $S_g=\sum\limits_{e=1}^{E}g_e^2$
+от $E$; пунктиром показана зависимость $1/E$. В рассматриваемом эксперименте величина $S_g$ практически совпадает с $1/E$, что соответствует почти равномерному softmax-гейтингу. Поэтому убывание границы $B_{S_g}$ в этом эксперименте определяется главным образом множителем $S_g$, а не изменением остальных множителей оценки. Это ожидаемо: все эксперты имеют одинаковую архитектуру, все они активны, а синтетическая задача не содержит явного механизма, стимулирующего специализацию отдельных экспертов. Поэтому рост числа экспертов приводит к уменьшению $S_g$ и, как следствие, к уменьшению границы $B_{S_g}$.
+
+\FloatBarrier
+
+\section{Заключение}
+
+В работе получена явная верхняя оценка спектральной нормы
+гаусс-ньютоновской компоненты матрицы Гессе для одного слоя
+смеси экспертов. Основные результаты:
+
+\begin{enumerate}
+    \item Оценка выражается через нормы весов экспертов ($M_1,M_2$),
+          норму входного вектора $M_{\mathbf{x}}$,
+          матрицу кривизны функции потерь $M_{\mathbf{A}}$
+          и \textbf{сумму квадратов коэффициентов гейтинга $S_g$}.
+    \item За счёт учёта $S_g$ оценка существенно точнее ранее известных,
+          которые фактически заменяли $S_g$ на единицу.
+          При $S_g\approx 1/E$ (равномерный гейтинг) новая граница
+          убывает с ростом числа экспертов, что полностью соответствует
+          экспериментальным данным.
+    \item Для разрежённого top-$K$ варианта оценка сохраняется
+          с заменой $S_g$ на $\sum_{e\in\mathcal T}g_e^2$,
+          и при $S_g\approx 1/K$ граница масштабируется как $1/K$.
+    \item \item Эксперименты в схеме <<учитель--ученик>> на синтетических данных согласуются с теоретической оценкой: граница с множителем $S_g$ убывает вместе с эмпирической нормой $\|\mathbf G\|_2$, а отношение $\|\mathbf G\|_2/B_{S_g}$ выходит на плато.
+\end{enumerate}
+
+Полученные результаты создают основу для анализа стабилизации
+ландшафта функции потерь при масштабировании MoE-моделей
+(росте числа экспертов или числа активных экспертов)
+и могут быть использованы для получения оценок требуемого
+объёма выборки в духе работ \cite{Kiselev2024, Meshkov2024}.
+В качестве дальнейших направлений представляет интерес
+распространение оценок на многослойные архитектуры со вниманием,
+а также изучение поведения $S_g$ в задачах, где эксперты
+приобретают выраженную специализацию.
 
 \begin{thebibliography}{99}
 
