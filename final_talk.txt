@@ -1,0 +1,260 @@
+% !TeX program = pdflatex
+\documentclass[aspectratio=169]{beamer}
+
+\usepackage[english,russian]{babel}
+\usepackage{cmap}
+\usepackage{tikz}
+\usepackage{array}
+\usepackage{multicol}
+\usepackage{booktabs}
+\usepackage{csquotes}
+\usepackage{amssymb,amsfonts,amsmath}
+\usepackage{bm}
+\usepackage{graphicx}
+
+\usecolortheme{beaver}
+\usefonttheme[onlymath]{serif}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[page number]
+\setbeamertemplate{blocks}[rounded=true,shadow=true]
+\setbeamersize{text margin left=0.5cm,text margin right=0.5cm}
+\setbeamerfont{author}{size=\normalsize}
+\setbeamerfont{institute}{size=\normalsize}
+\setbeamerfont{date}{size=\normalsize}
+
+\title{Улучшение оценки нормы разности гессианов\\ для модели смеси экспертов}
+\author{
+    Даниил~Игнатьев\\
+    Консультант: Никита~Киселёв, к.ф.-м.н.\\
+    Эксперт: Андрей~Грабовой, к.ф.-м.н.
+}
+\institute{
+    Курс: Моя первая научная статья\\
+    МФТИ, кафедра интеллектуальных систем
+}
+\date{23 апреля 2026 г.}
+
+\graphicspath{{figs/}}
+
+\begin{document}
+
+% ==================== 1. Титульный слайд ====================
+\begin{frame}
+    \thispagestyle{empty}
+    \maketitle
+\end{frame}
+
+% ==================== 2. Цель и мотивация ====================
+\begin{frame}{Цель и мотивация}
+    \begin{block}{Проблема}
+        Локальная геометрия функции потерь для смеси экспертов (MoE) изучена слабо.
+        Анализ гессиана необходим для понимания сходимости и требуемого объёма данных.
+    \end{block}
+    \begin{block}{Цель}
+        Получить явную верхнюю оценку спектральной нормы гаусс-ньютоновской компоненты
+        $\|\mathbf{G}(\mathbf{w})\|_2$ для слоя MoE, выраженную через:
+        \begin{itemize}
+            \item нормы весов экспертов и гейтинга,
+            \item норму входных данных,
+            \item архитектурные параметры (число экспертов, размерности).
+        \end{itemize}
+    \end{block}
+    \begin{block}{Зачем?}
+        Оценка позволит анализировать стабилизацию ландшафта при масштабировании модели
+        (увеличении числа экспертов $E$ или числа активных экспертов $K$).
+    \end{block}
+\end{frame}
+
+% ==================== 3. Основная идея ====================
+\begin{frame}{Основная идея}
+    \small
+    Для матрично‑представимых сетей гессиан функции потерь раскладывается на две компоненты:
+    $\mathbf{H}(\mathbf{w}) = \mathbf{G}(\mathbf{w}) + \mathbf{R}(\mathbf{w})$, \; 
+    $\mathbf{G}(\mathbf{w}) = \mathbf{J}(\mathbf{w})^{\!\top}\mathbf{A}(\mathbf{w})\mathbf{J}(\mathbf{w})$.
+
+    \vspace{0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.52\textwidth}
+            \textbf{Блочная факторизация якобиана:}
+            \[
+                \mathbf{J}^{(p)} = \mathbf{S}^{(p)}\mathbf{P}^{(p)},\qquad
+                \mathbf{G}^{(p,q)} = \mathbf{P}^{(p)\top}\mathbf{S}^{(p)\top}\mathbf{A}\mathbf{S}^{(q)}\mathbf{P}^{(q)}.
+            \]
+            \textbf{Цель:} верхняя оценка $\|\mathbf{G}\|_2$ через нормы весов и архитектурные параметры.
+
+            \vspace{0.1cm}
+            \centering
+            \includegraphics[width=0.8\textwidth]{gn_ratio.png}
+            % \par\footnotesize $\|\mathbf{G}\|/\|\mathbf{H}\|$ приближается к $1$ после нескольких эпох
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \centering
+            \vspace{-0.35cm}
+            \includegraphics[width=0.9\textwidth]{output3.png}
+            % \par\footnotesize Блочная структура $\mathbf{H}$ на реальных данных
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==================== 4. Постановка задачи ====================
+\begin{frame}{Постановка задачи}
+    \begin{block}{Гипотеза}
+        Спектральную норму $\|\mathbf{G}(\mathbf{w})\|_2$ для MoE‑слоя можно ограничить сверху
+        выражением, которое \textbf{не содержит явного множителя $E$} (полного числа экспертов)
+        и не деградирует при переходе к разреженной top‑$K$ маршрутизации.
+    \end{block}
+
+    \begin{block}{Модель}
+        Один слой MoE: $\displaystyle \mathbf{z} = \sum_{e=1}^{E}\gamma_e(\mathbf{x})\,
+        \mathbf{W}_e^{(2)}\mathrm{ReLU}(\mathbf{W}_e^{(1)}\mathbf{x})$,\\
+        $\gamma_e$ --- softmax (или top‑$K$ с softmax на активном множестве).\\
+        Функция потерь $\ell(\mathbf{z},y)$ дважды дифференцируема.
+        Гессиан $\mathbf{H}=\mathbf{G}+\mathbf{R}$,
+        $\mathbf{G}=\mathbf{J}^{\!\top}\mathbf{A}\mathbf{J}$,
+        $\mathbf{A}=\nabla_{\mathbf{z}}^2\ell$.
+    \end{block}
+
+    \begin{block}{Критерии качества оценки}
+        \begin{itemize}
+            \item Верхняя граница должна выполняться для любых допустимых конфигураций.
+            \item При масштабировании (рост $E$ или $K$) граница должна убывать вместе с эмпирической нормой.
+        \end{itemize}
+    \end{block}
+\end{frame}
+
+% ==================== 5. Теоретическая оценка (исправлен) ====================
+\begin{frame}{Теоретическая оценка}
+    \begin{theorem}[Основной результат]
+        Пусть $\|\mathbf{x}\|_2 \le M_{\mathbf{x}}$, $\|\mathbf{A}\|_2 \le M_{\mathbf{A}}$,
+        $\|\mathbf{W}_e^{(1)}\|_2 \le M_1$, $\|\mathbf{W}_e^{(2)}\|_2 \le M_2$ для всех $e$,
+        и $S_g(\mathbf{x}) = \sum\limits_{e=1}^{E} g_e(\mathbf{x})^2$.
+        Тогда для softmax‑гейтинга
+        \[
+            \|\mathbf{G}(\mathbf{w})\|_2 \;\le\;
+            M_{\mathbf{A}} M_{\mathbf{x}}^2 S_g(\mathbf{x})
+            \bigl( M_1^2 + M_2^2 + 4 M_1^2 M_2^2 M_{\mathbf{x}}^2 \bigr).
+        \]
+    \end{theorem}
+    \begin{block}{Следствие для top‑$K$}
+        Для разреженного гейтинга (top‑$K$, затем softmax на $K$ экспертах)
+        оценка сохраняется с заменой $S_g$ на $\sum\limits_{e\in\mathcal{T}} \tilde g_e^2$.
+    \end{block}
+    \vspace{0.1cm}
+    \textit{Примечание:} Если не учитыват $S_g$, получается более простая граница:
+    \[
+        \|\mathbf{G}(\mathbf{w})\|_2 \;\le\; M_{\mathbf{A}} M_{\mathbf{x}}^2 \bigl( M_1^2 + M_2^2 + M_1^2 M_2^2 M_{\mathbf{x}}^2 \bigr).
+    \]
+\end{frame}
+
+% ==================== 6. Цели вычислительного эксперимента ====================
+\begin{frame}{Цели вычислительного эксперимента}
+    \begin{enumerate}
+        \item Проверить справедливость теоретической оценки на синтетических данных
+              в сценарии «учитель–ученик».
+        \item Сравнить улучшенную оценку (с $S_g$) с грубой оценкой (без $S_g$).
+        \item Оценить, насколько верхняя граница близка к реальной норме.
+        \item Проверить, сохраняется ли зависимость от $S_g$ в более сложной архитектуре
+              (ViT + MoE на MNIST).
+    \end{enumerate}
+\end{frame}
+
+% ==================== 7. Эксперимент "учитель-ученик", часть 1 (исправлен) ====================
+\begin{frame}{Эксперимент «учитель–ученик» (часть 1)}
+    \footnotesize
+    \begin{center}
+        \renewcommand{\arraystretch}{1.1}
+        \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.28\textwidth} >{\raggedright\arraybackslash}p{0.62\textwidth}@{}}
+            \toprule
+            Модель          & MoE‑слой (softmax‑гейтинг), $d{=}16$, $d_{\mathrm{ff}}{=}32$, $E$ варьируется \\
+            \addlinespace[2pt]
+            Сценарий        & <<Учитель--ученик>>: фиксированная и обучаемая модели одной \\ &архитектуры; ученик учится предсказывать выходы учителя\\
+            \addlinespace[2pt]
+            Данные          & Синтетические: 2048 обуч. / 512 тест. \\
+            \addlinespace[2pt]
+            Функция потерь  & $\frac12\|\mathbf{z}-\mathbf{y}\|_2^2$ \quad ($\mathbf{A}=\mathbf{I}$, $M_{\mathbf{A}}=1$) \\
+            \addlinespace[2pt]
+            Метрики         & $\|\mathbf{G}\|_2$, улучшенная граница $B_{S_g}$, грубая граница $B_0$ \\
+            \bottomrule
+        \end{tabular}
+    \end{center}
+    \vspace{0.2cm}
+    
+    \begin{columns}[T]
+        \begin{column}{0.4\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{bound_comparison_article.pdf}\\
+            {\small Сравнение $\|\mathbf{G}\|_2$ и верхних оценок}
+        \end{column}
+        \begin{column}{0.45\textwidth}
+            \textbf{Анализ:}
+            \begin{itemize}
+                \item Оценка с $S_g$ убывает вместе с $\|\mathbf{G}\|_2$.
+                \item Оценка без $S_g$ — константа, не отражает масштабирование.
+                \item Почему $S_g \approx 1/E$? При инициализации и в симметричном сценарии softmax почти равномерен.
+                \item Следовательно, граница $\sim 1/E~-$ объясняет убывание.
+            \end{itemize}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==================== 8. Эксперимент "учитель-ученик", часть 2 ====================
+\begin{frame}{Эксперимент «учитель–ученик» (часть 2)}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{bound_ratios_article.pdf}\\
+            {\small Отношение $\|\mathbf{G}\|_2$ к границам}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{Sg_vs_E_article.pdf}\\
+            {\small $S_g$ от $E$ (пунктир --- $1/E$)}
+        \end{column}
+    \end{columns}
+    \vspace{0.3cm}
+    \textbf{Вывод:} Грубая оценка $B_0$ не отражает масштабирование.\\ Отношение $\|\mathbf{G}\|_2 / B_{S_g}$ стабилизируется, $S_g \approx 1/E$ определяет убывание границы.
+\end{frame}
+
+% ==================== 9. Эксперимент 2: ViT+MoE на MNIST ====================
+\begin{frame}{Эксперимент 2: ViT+MoE на MNIST}
+    \footnotesize
+    \begin{center}
+        \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.28\textwidth} >{\raggedright\arraybackslash}p{0.62\textwidth}@{}}
+            \toprule
+            Архитектура    & ViT с одним трансформерным блоком, FFN заменён на MoE ($d=16$, $d_{\mathrm{ff}}=64$) \\
+            \addlinespace[2pt]
+            Данные         & MNIST (обучение 5 эпох, Adam, lr $10^{-3}$) \\
+            \addlinespace[2pt]
+            Измерения      & $\|\mathbf{G}\|_2$ (только по параметрам MoE-слоя) и среднее $S_g$ на тесте \\
+            \bottomrule
+        \end{tabular}
+    \end{center}
+    \vspace{0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{vit_moe_mnist_norms.pdf}\\
+            {\small $\|\mathbf{G}\|_2$ и $S_g$ от $E$ (пунктир --- $E^{-0.75}$)}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{vit_moe_mnist_ratio.pdf}\\
+            {\small Отношение $\|\mathbf{G}\|_2 / S_g$}
+        \end{column}
+    \end{columns}
+    % Выводов не пишем, только устно комментируем
+\end{frame}
+
+% ==================== 10. Выводы ====================
+\begin{frame}{Выводы}
+    \begin{enumerate}
+        \item Получена явная верхняя оценка спектральной нормы гаусс‑ньютоновской
+              компоненты гессиана для слоя MoE.
+        \item Оценка содержит множитель $S_g = \sum g_e^2$ и \textbf{не содержит явного множителя $E$}.
+        \item Для разреженной top‑$K$ маршрутизации оценка сохраняется с заменой $S_g$ на сумму квадратов весов активных экспертов.
+        \item Эксперименты на синтетике и MNIST подтверждают: $S_g$ определяет масштабирование $\|\mathbf{G}\|_2$ при росте $E$.
+        \item Результаты создают основу для анализа стабилизации ландшафта при масштабировании MoE-моделей.
+    \end{enumerate}
+\end{frame}
+
+\end{document}
